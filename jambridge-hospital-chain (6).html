@@ -1,0 +1,1535 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>JamBridge — Hospital Chain HIE Simulation</title>
+<style>
+
+/* ═══════════════════════════════════════════════════════════════════
+   DESIGN TOKENS
+   Option 4: Shell #F4F6F8 · Navy headers #1B4F8A · Teal FHIR #0D7A6E
+   Teal:  #0D7A6E accent · #1A9E90 light · #0A6058 dark
+   Ice:   #E0EFFE pale · #B8D4E8 border
+   Text:  #C8E4F4 primary · #7ABCD8 muted · #4A7898 dim
+   Code:  #A8D8F0 string · #F0C080 key · #90D8B8 value · #E07878 error
+   ═══════════════════════════════════════════════════════════════════ */
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  /* ══ Option 4 — Pure white + navy/teal accent headers ══════════════
+     Shell: neutral grey #F4F6F8 — distinct from commercial site ice-blue.
+     Panel headers: #1B4F8A (auth/flow) and #0D7A6E (FHIR) — brand colours.
+     All text verified >= 4.5:1 WCAG AA.
+     ══════════════════════════════════════════════════════════════════ */
+  --bg:          #F4F6F8;   /* neutral grey shell — not blue-white */
+  --surface:     #F4F6F8;   /* topbar + bottombar */
+  --surface2:    #1B4F8A;   /* auth panel headers — brand navy */
+  --surface3:    #F6F8FA;   /* code panel bg — very light grey */
+  --panel-body:  #FFFFFF;
+  --navy:        #1B4F8A;
+  --navy-dark:   #133A6A;
+  --navy-glow:   rgba(27,79,138,.2);
+  --teal:        #0D7A6E;
+  --teal-light:  #0A7A6E;
+  --teal-glow:   rgba(13,122,110,.2);
+  --border:      #DDE3EA;   /* panel edges on grey shell */
+  --border-mid:  #C8D2DC;   /* stronger separator */
+  --text:        #0D1F33;   /* 16.7:1 on white ✓ */
+  --text-muted:  #2C5070;   /* 8.4:1 on white ✓ */
+  --text-dim:    #3D6A8A;   /* 5.3:1 on #F4F6F8 ✓ (was #4A7898 = 4.4 FAIL) */
+  /* Syntax — GitHub light, verified >= 4.5:1 on #F6F8FA */
+  --key:         #0550AE;   /* 7.1:1 ✓ */
+  --str:         #0A5A50;   /* 7.6:1 ✓ */
+  --val:         #116329;   /* 6.6:1 ✓ */
+  --err:         #B91C1C;   /* 6.2:1 ✓ */
+  --warn:        #854D0E;   /* 7.1:1 ✓ */
+  --font-sans:   -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
+  --font-mono:   'SFMono-Regular', 'Cascadia Code', Consolas, 'Liberation Mono', monospace;
+}
+
+html, body {
+  height: 100%;
+  overflow: hidden;
+  background: #F4F6F8;  /* neutral grey shell */
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* ── Top bar ─────────────────────────────────────────────────────── */
+#topbar {
+  height: 42px;
+  background: #F4F6F8;
+  border-bottom: 1px solid #DDE3EA;
+  display: flex;
+  align-items: center;
+  padding: 0 1.25rem;
+  gap: 1rem;
+  flex-shrink: 0;
+}
+.tb-logo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  font-size: 14px;
+  color: #0D1F33;  /* 16.7:1 on #F4F6F8 ✓ */
+  letter-spacing: -.01em;
+}
+.tb-logo-mark {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #1B4F8A;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  font-weight: 800;
+  color: white;
+}
+.tb-sep { width: 1px; height: 20px; background: #DDE3EA; }
+.tb-title {
+  font-size: 13px;
+  color: #2C5070;  /* 7.8:1 on #F4F6F8 ✓ */
+  font-weight: 500;
+}
+.tb-badge {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 10px;
+  border-radius: 20px;
+  background: rgba(13,122,110,.12);
+  color: #0A5A50;  /* 7.3:1 on #F4F6F8 ✓ */
+  border: 1px solid rgba(13,122,110,.3);
+  letter-spacing: .04em;
+}
+.tb-right { margin-left: auto; display: flex; align-items: center; gap: .625rem; }
+.tb-link {
+  font-size: 12px;
+  color: #2C5070;  /* 7.8:1 on #F4F6F8 ✓ */
+  text-decoration: none;
+  padding: 3px 10px;
+  border-radius: 6px;
+  border: 1px solid #C8D2DC;
+  transition: border-color .15s, color .15s;
+}
+.tb-link:hover { border-color: #1B4F8A; color: #0D1F33; }
+
+/* ── Main layout ─────────────────────────────────────────────────── */
+#shell {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+#main {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  gap: 2px;  /* thin dark gap between panels — visible separation */
+  overflow: hidden;
+  min-height: 0;
+  background: #DDE3EA;  /* neutral border between panels */
+}
+
+/* ── Panel base ──────────────────────────────────────────────────── */
+.panel {
+  border: 1px solid #DDE3EA;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+.panel-header {
+  height: 34px;
+  background: #1B4F8A;  /* brand navy header */
+  border-bottom: 1px solid #133A6A;
+  display: flex;
+  align-items: center;
+  padding: 0 1rem;
+  gap: .625rem;
+  flex-shrink: 0;
+}
+.panel-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #7AAAD0;
+}
+.panel-dot.teal  { background: #5AC4B8; }
+.panel-dot.navy  { background: #7AAAD0; }
+.panel-dot.warn  { background: #F0C060; }
+.panel-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: #FFFFFF;  /* 8.3:1 on #1B4F8A ✓ */
+}
+.panel-badge {
+  margin-left: auto;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 20px;
+  background: #133A6A;
+  color: #E0F0FF;  /* 7.1:1 on #133A6A ✓ */
+  border: 1px solid #0D2A50;
+}
+.panel-body {
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+  background: #FFFFFF;  /* light content area contrasts with dark chrome */
+}
+/* Teal header variant — Audit + Token panels (FHIR data layer) */
+.panel-header.teal-hdr {
+  background: #0D7A6E;
+  border-bottom: 1px solid #0A6058;
+}
+/* When badge sits inside teal header */
+.panel-header.teal-hdr .panel-badge {
+  background: #0A5A50;
+  border-color: #084840;
+  color: #D8F2EE;  /* 6.8:1 on #0A5A50 ✓ */
+}
+
+/* ── Flow diagram panel (top-left, spans 2 rows) ─────────────────── */
+#panel-flow {
+  grid-column: 1;
+  grid-row: 1 / 3;
+  border-right: 1px solid #C8D2DC;
+}
+
+/* ── HTTP packet panel (top-right) ───────────────────────────────── */
+#panel-http {
+  grid-column: 2;
+  grid-row: 1;
+  border-bottom: 1px solid #C8D2DC;
+}
+
+/* ── Token + audit panels (bottom-right, side by side) ──────────── */
+#panel-token {
+  grid-column: 2;
+  grid-row: 2;
+  border-top: 0;
+}
+
+/* ── Bottom bar ──────────────────────────────────────────────────── */
+#bottombar {
+  height: 52px;
+  background: #F4F6F8;
+  border-top: 1px solid #DDE3EA;
+  display: flex;
+  align-items: center;
+  padding: 0 1.25rem;
+  gap: 1rem;
+  flex-shrink: 0;
+}
+
+/* Step dots */
+#step-dots {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+}
+.step-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #E2E8F0;
+  border: 1px solid #C8D2DC;
+  cursor: pointer;
+  transition: background .15s, transform .1s, border-color .15s;
+  flex-shrink: 0;
+}
+.step-dot:hover { transform: scale(1.3); border-color: #1B4F8A; }
+.step-dot.active {
+  background: #1B4F8A;
+  border-color: #1B4F8A;
+  transform: scale(1.2);
+  box-shadow: 0 0 6px rgba(27,79,138,.3);
+}
+.step-dot.done {
+  background: #0D7A6E;
+  border-color: #0D7A6E;
+}
+/* Progress line between dots */
+#step-dots::before {
+  content: '';
+  position: absolute;
+  left: 1.25rem;
+  height: 1px;
+  background: #DDE3EA;
+  z-index: 0;
+}
+
+/* Step label */
+#step-label {
+  font-size: 12px;
+  color: #2C5070;  /* 7.8:1 on #F4F6F8 ✓ */
+  font-weight: 500;
+  min-width: 260px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+#step-counter {
+  font-size: 11px;
+  color: #2C5070;  /* 7.8:1 on #F4F6F8 ✓ */
+  font-family: var(--font-mono);
+  min-width: 50px;
+  text-align: right;
+}
+
+/* Controls */
+#controls { display: flex; align-items: center; gap: .5rem; }
+.ctrl-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: 7px;
+  border: 1px solid #C8D2DC;
+  background: #E8EEF4;
+  color: #2C5070;
+  font-size: 13px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background .12s, border-color .12s, color .12s;
+}
+.ctrl-btn:hover { background: #D8E4F0; color: #0D1F33; border-color: #1B4F8A; }
+.ctrl-btn.primary {
+  background: #1B4F8A;
+  border-color: #1B4F8A;
+  color: white;
+  width: 34px; height: 34px;
+}
+.ctrl-btn.primary:hover { background: #133A6A; }
+.speed-select {
+  background: #E8EEF4;
+  border: 1px solid #C8D2DC;
+  color: #2C5070;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  padding: 4px 6px;
+  border-radius: 6px;
+  cursor: pointer;
+  outline: none;
+}
+.speed-select:hover { border-color: #1B4F8A; color: #0D1F33; }
+
+/* ── Flow diagram SVG ────────────────────────────────────────────── */
+#flow-svg {
+  width: 100%;
+  height: 100%;
+  background: #F8FAFB;  /* near-white neutral bg for diagram */
+}
+
+/* Actor nodes */
+.actor-node rect {
+  transition: fill .25s, stroke .25s, filter .25s;
+}
+.actor-node text {
+  transition: fill .25s;
+  font-family: var(--font-sans);
+  pointer-events: none;
+}
+.actor-node.idle rect {
+  fill: #FFFFFF;
+  stroke: #DDE3EA;
+  stroke-width: 1.5;
+}
+.actor-node.idle .node-title { fill: #1E3D58; }  /* 11.3:1 on white ✓ */
+.actor-node.idle .node-sub   { fill: #3D6A8A; }  /* 5.8:1 on white ✓ */
+
+.actor-node.active rect {
+  fill: #1B4F8A;
+  stroke: #1B4F8A;
+  stroke-width: 2;
+  filter: drop-shadow(0 0 10px rgba(27,79,138,.25));
+}
+.actor-node.active .node-title { fill: #FFFFFF; }
+.actor-node.active .node-sub   { fill: #B8D8F8; }
+
+.actor-node.teal rect, .actor-node.consent rect, .actor-node.referral rect {
+  fill: #0D7A6E;
+  stroke: #0D7A6E;
+  stroke-width: 2;
+  filter: drop-shadow(0 0 10px rgba(13,122,110,.25));
+}
+.actor-node.teal .node-title, .actor-node.consent .node-title, .actor-node.referral .node-title { fill: #FFFFFF; }
+.actor-node.teal .node-sub,   .actor-node.consent .node-sub,   .actor-node.referral .node-sub   { fill: #B0E8E0; }
+/* Lab System active — amber */
+.actor-node.lab rect {
+  fill: #854D0E;  stroke: #854D0E;  stroke-width: 2;
+  filter: drop-shadow(0 0 10px rgba(133,77,14,.25));
+}
+.actor-node.lab .node-title { fill: #FFFFFF; }
+.actor-node.lab .node-sub   { fill: #F8D8A0; }
+/* PACS/DICOM active — purple */
+.actor-node.pacs rect {
+  fill: #534AB7;  stroke: #534AB7;  stroke-width: 2;
+  filter: drop-shadow(0 0 10px rgba(83,74,183,.25));
+}
+.actor-node.pacs .node-title { fill: #FFFFFF; }
+.actor-node.pacs .node-sub   { fill: #C8C0F0; }
+
+.actor-node.done rect {
+  fill: #E8F0FA;
+  stroke: #B0C4DC;
+  stroke-width: 1.5;
+}
+.actor-node.done .node-title { fill: #1B4F8A; }  /* 7.2:1 on #E8F0FA ✓ */
+.actor-node.done .node-sub   { fill: #2C5070; }  /* 7.3:1 on #E8F0FA ✓ */
+
+/* Connection lines */
+.conn-line {
+  fill: none;
+  stroke: #C8D2DC;
+  stroke-width: 1.5;
+  stroke-dasharray: 5 4;
+  stroke-linecap: round;
+  transition: stroke .25s, stroke-dasharray .25s;
+}
+/* path elements also need fill:none — already in conn-line but explicit for paths */
+path.conn-line { fill: none; }
+.conn-line.active {
+  stroke: #1B4F8A;
+  stroke-dasharray: none;
+  stroke-width: 2;
+  fill: none;
+}
+.conn-line.teal { stroke: #0D7A6E; stroke-dasharray: none; stroke-width: 2; fill: none; }
+
+/* Packet traveller — animated dot that moves along connections */
+.packet {
+  r: 5;
+  fill: #0A7A6E;
+  filter: drop-shadow(0 0 4px rgba(13,122,110,.7));
+  opacity: 0;
+}
+
+/* ── Code / log panels ───────────────────────────────────────────── */
+.code-scroll {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.7;
+  padding: .875rem 1rem;
+  overflow-y: auto;
+  height: 100%;
+  color: #0D1F33;  /* 16.7:1 on #F6F8FA ✓ */
+  background: #F6F8FA;  /* neutral light code bg */
+}
+.code-scroll::-webkit-scrollbar { width: 4px; }
+.code-scroll::-webkit-scrollbar-track { background: transparent; }
+.code-scroll::-webkit-scrollbar-thumb { background: #C8D2DC; border-radius: 2px; }
+
+/* HTTP syntax — GitHub light inspired */
+.http-method  { color: #0550AE; font-weight: 700; }
+.http-url     { color: #0D7A6E; }
+.http-header  { color: #2C5070; }
+.http-key     { color: #0550AE; }
+.http-str     { color: #0A5A50; }
+.http-num     { color: #116329; }
+.http-bool    { color: #8250DF; }
+.http-status-ok  { color: #116329; font-weight: 700; }
+.http-status-err { color: #CF222E; font-weight: 700; }
+.http-comment { color: #486880; font-style: italic; } /* 5.5:1 on #F6F8FA ✓ */
+.http-arrow   { color: #486880; } /* 5.5:1 on #F6F8FA ✓ */
+.http-ann     { color: #0D7A6E; font-weight: 600; }
+.http-muted   { color: #3D6A8A; }
+
+/* Token panel */
+.token-field {
+  display: flex;
+  align-items: baseline;
+  gap: .5rem;
+  padding: 3px 0;
+  border-bottom: 1px solid rgba(27,79,138,.12);
+}
+.token-key { color: var(--key); font-weight: 600; }
+.token-val { color: var(--str); word-break: break-all; }
+.token-ann {
+  margin-left: auto;
+  font-size: 11px;
+  color: #0A5A50;
+  font-family: var(--font-sans);
+  white-space: nowrap;
+  padding: 1px 7px;
+  border-radius: 4px;
+  background: rgba(13,122,110,.1);
+  border: 1px solid rgba(13,122,110,.25);
+}
+.token-ann.warn {
+  color: #9A6700;
+  background: rgba(154,103,0,.08);
+  border-color: rgba(154,103,0,.25);
+}
+.token-ann.important {
+  color: #C84020;
+  background: rgba(200,64,32,.08);
+  border-color: rgba(200,64,32,.25);
+}
+
+/* Idle / empty state */
+.idle-state {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: .5rem;
+  color: #3D6A8A;  /* 5.8:1 on white ✓ */
+  font-size: 12px;
+  pointer-events: none;
+}
+.idle-icon { font-size: 28px; opacity: .3; }
+
+/* Scan line removed — looked wrong on light theme */
+#scanline { display: none; }
+
+/* ── Tooltip ─────────────────────────────────────────────────────── */
+#tooltip {
+  position: fixed;
+  background: #FFFFFF;
+  border: 1px solid #DDE3EA;
+  border-radius: 8px;
+  padding: .5rem .875rem;
+  font-size: 12px;
+  color: #2C5070;
+  pointer-events: none;
+  z-index: 200;
+  max-width: 240px;
+  line-height: 1.5;
+  display: none;
+  box-shadow: 0 4px 16px rgba(0,0,0,.12);
+}
+
+/* ── Responsive: token + audit split ─────────────────────────────── */
+#bottom-right {
+  grid-column: 2;
+  grid-row: 2;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  border-top: 0;
+  background: #DDE3EA;  /* border between panels */
+}
+#panel-token  { border-right: 1px solid #C8D2DC; }
+#panel-audit  { }
+
+/* ── Step info overlay (shows on centrepiece steps) ──────────────── */
+#step-info {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: #FFFFFF;
+  border: 1px solid #DDE3EA;
+  border-radius: 8px;
+  padding: .5rem .875rem;
+  font-size: 11px;
+  color: #2C5070;
+  max-width: 200px;
+  line-height: 1.5;
+  z-index: 10;
+  display: none;
+  box-shadow: 0 2px 10px rgba(0,0,0,.1);
+}
+
+/* extra: amber + purple connection variants */
+.conn-line.amber  { stroke:#854D0E;stroke-dasharray:none;stroke-width:2;fill:none;animation:connPulse 1.8s ease-in-out infinite; }
+.conn-line.purple { stroke:#534AB7;stroke-dasharray:none;stroke-width:2;fill:none;animation:connPulse 1.8s ease-in-out infinite; }
+.actor-node.lab  rect  { fill:#854D0E;stroke:#854D0E;stroke-width:2;filter:drop-shadow(0 0 10px rgba(133,77,14,.25)); }
+.actor-node.lab  .node-title { fill:#FFFFFF; }
+.actor-node.lab  .node-sub   { fill:#F8D8A0; }
+.actor-node.pacs rect  { fill:#534AB7;stroke:#534AB7;stroke-width:2;filter:drop-shadow(0 0 10px rgba(83,74,183,.25)); }
+.actor-node.pacs .node-title { fill:#FFFFFF; }
+.actor-node.pacs .node-sub   { fill:#C8C0F0; }
+</style>
+</head>
+<body>
+<div id="tooltip"></div>
+<div id="step-info"></div>
+<div id="shell">
+
+<div id="topbar">
+  <div class="tb-logo"><div class="tb-logo-mark">JB</div><span>JamBridge</span></div>
+  <div class="tb-sep"></div>
+  <div class="tb-title">Hospital Chain HIE — Live HL7v2 + FHIR Simulation</div>
+  <div class="tb-badge">Full Jam Platform · 26 steps</div>
+  <div class="tb-right">
+    <a class="tb-link" href="https://platform.akhester.com/demo" target="_blank">SMART demo ↗</a>
+    <a class="tb-link" href="https://platform.akhester.com" target="_blank">platform.akhester.com ↗</a>
+  </div>
+</div>
+
+<div id="main">
+
+<div class="panel" id="panel-flow">
+  <div class="panel-header">
+    <div class="panel-dot navy"></div>
+    <div class="panel-title">Platform Architecture — Live</div>
+    <div class="panel-badge" id="flow-step-label">Waiting to start</div>
+  </div>
+  <div class="panel-body">
+  <svg id="flow-svg" viewBox="0 0 680 790" preserveAspectRatio="xMidYMid meet">
+  <defs>
+    <marker id="arr-dim"    viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" fill="#C8DFF0"/></marker>
+    <marker id="arr-navy"   viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" fill="#1B4F8A"/></marker>
+    <marker id="arr-teal"   viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" fill="#0D7A6E"/></marker>
+    <marker id="arr-amber"  viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" fill="#854D0E"/></marker>
+    <marker id="arr-purple" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" fill="#534AB7"/></marker>
+    <filter id="node-glow"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    <clipPath id="cp-his">   <rect x="15"  y="20"  width="150" height="90" rx="10"/></clipPath>
+    <clipPath id="cp-clin">  <rect x="235" y="20"  width="160" height="90" rx="10"/></clipPath>
+    <clipPath id="cp-auth">  <rect x="495" y="20"  width="160" height="90" rx="10"/></clipPath>
+    <clipPath id="cp-mpi">   <rect x="15"  y="140" width="150" height="90" rx="10"/></clipPath>
+    <clipPath id="cp-jb">    <rect x="235" y="140" width="160" height="90" rx="10"/></clipPath>
+    <clipPath id="cp-guard"> <rect x="495" y="140" width="160" height="90" rx="10"/></clipPath>
+    <clipPath id="cp-lab">   <rect x="15"  y="270" width="150" height="90" rx="10"/></clipPath>
+    <clipPath id="cp-hapi">  <rect x="235" y="270" width="160" height="90" rx="10"/></clipPath>
+    <clipPath id="cp-co">    <rect x="495" y="270" width="160" height="90" rx="10"/></clipPath>
+    <clipPath id="cp-shr">   <rect x="15"  y="400" width="150" height="90" rx="10"/></clipPath>
+    <clipPath id="cp-pacs">  <rect x="235" y="400" width="160" height="90" rx="10"/></clipPath>
+    <clipPath id="cp-ts">    <rect x="495" y="400" width="160" height="90" rx="10"/></clipPath>
+    <clipPath id="cp-jconn"> <rect x="15"  y="530" width="150" height="90" rx="10"/></clipPath>
+    <clipPath id="cp-pharma"><rect x="235" y="530" width="160" height="90" rx="10"/></clipPath>
+    <clipPath id="cp-ref">   <rect x="495" y="530" width="160" height="90" rx="10"/></clipPath>
+    <clipPath id="cp-audit"> <rect x="235" y="660" width="160" height="90" rx="10"/></clipPath>
+  </defs>
+
+  <!-- Static edges -->
+  <line id="c-his-clin"  x1="165" y1="65"  x2="233" y2="65"  class="conn-line" marker-end="url(#arr-dim)"/>
+  <line id="c-clin-auth" x1="395" y1="65"  x2="493" y2="65"  class="conn-line" marker-end="url(#arr-dim)"/>
+  <line id="c-auth-guard" x1="575" y1="111" x2="575" y2="138" class="conn-line" marker-end="url(#arr-dim)"/>
+  <path id="c-his-jb"    d="M90,111 C90,130 235,168 235,168" class="conn-line" fill="none" marker-end="url(#arr-dim)"/>
+  <line id="c-clin-jb"   x1="315" y1="111" x2="315" y2="138" class="conn-line" marker-end="url(#arr-dim)"/>
+  <line id="c-mpi-jb"    x1="165" y1="185" x2="233" y2="185" class="conn-line" marker-end="url(#arr-dim)"/>
+  <line id="c-jb-guard"  x1="395" y1="185" x2="493" y2="185" class="conn-line" marker-end="url(#arr-dim)"/>
+  <line id="c-jb-hapi"   x1="315" y1="231" x2="315" y2="268" class="conn-line" marker-end="url(#arr-dim)"/>
+  <path id="c-lab-hapi"  d="M90,311 C90,340 235,295 235,295" class="conn-line" fill="none" marker-end="url(#arr-dim)"/>
+  <line id="c-hapi-co"   x1="395" y1="315" x2="493" y2="315" class="conn-line" marker-end="url(#arr-dim)"/>
+  <path id="c-shr-hapi"  d="M90,400 C90,365 225,330 225,315" class="conn-line" fill="none" marker-end="url(#arr-dim)"/>
+  <line id="c-hapi-pacs" x1="315" y1="361" x2="315" y2="398" class="conn-line" marker-end="url(#arr-dim)"/>
+  <line id="c-hapi-ts"   x1="395" y1="315" x2="493" y2="445" class="conn-line" marker-end="url(#arr-dim)"/>
+  <path id="c-jconn-hapi" d="M165,575 C200,575 225,340 225,315" class="conn-line" fill="none" marker-end="url(#arr-dim)"/>
+  <path id="c-hapi-ph"   d="M395,361 C448,361 493,555 493,555" class="conn-line" fill="none" marker-end="url(#arr-dim)"/>
+  <path id="c-ref-hapi"  d="M575,530 C575,420 435,361 395,361" class="conn-line" fill="none" marker-end="url(#arr-dim)"/>
+  <path id="c-hapi-audit" d="M315,361 C315,500 315,630 315,658" class="conn-line" fill="none" marker-end="url(#arr-dim)"/>
+  <path id="c-ph-audit"  d="M575,621 C575,680 397,700 397,700" class="conn-line" fill="none" marker-end="url(#arr-dim)"/>
+  <path id="c-ack"       d="M265,151 C200,130 130,111 90,111" class="conn-line" fill="none" marker-end="url(#arr-dim)"/>
+
+  <!-- Step number labels -->
+  <g font-size="10" fill="#3D6A8A" font-family="monospace">
+    <text id="sn1"  x="193" y="59"  opacity="0">1</text>
+    <text id="sn2"  x="438" y="59"  opacity="0">9</text>
+    <text id="sn3"  x="575" y="128" opacity="0">9</text>
+    <text id="sn4"  x="150" y="148" opacity="0">2</text>
+    <text id="sn5"  x="323" y="124" opacity="0">2</text>
+    <text id="sn6"  x="195" y="179" opacity="0">3</text>
+    <text id="sn7"  x="437" y="179" opacity="0">19</text>
+    <text id="sn8"  x="323" y="254" opacity="0">6</text>
+    <text id="sn9"  x="437" y="309" opacity="0">5,21</text>
+    <text id="sn10" x="148" y="408" opacity="0">11</text>
+    <text id="sn11" x="323" y="385" opacity="0">17</text>
+    <text id="sn12" x="437" y="413" opacity="0">4,16</text>
+    <text id="sn13" x="323" y="640" opacity="0">25</text>
+    <text id="sn14" x="147" y="148" opacity="0">8</text>
+  </g>
+
+  <!-- Active edge overlays (ae1..ae19) -->
+  <line id="ae1"  x1="165" y1="65"  x2="233" y2="65"  class="conn-line" opacity="0" marker-end="url(#arr-navy)"/>
+  <line id="ae2"  x1="395" y1="65"  x2="493" y2="65"  class="conn-line" opacity="0" marker-end="url(#arr-navy)"/>
+  <line id="ae3"  x1="575" y1="111" x2="575" y2="138" class="conn-line" opacity="0" marker-end="url(#arr-navy)"/>
+  <path id="ae4"  d="M90,111 C90,130 235,168 235,168"  class="conn-line" fill="none" opacity="0" marker-end="url(#arr-navy)"/>
+  <line id="ae5"  x1="315" y1="111" x2="315" y2="138" class="conn-line" opacity="0" marker-end="url(#arr-navy)"/>
+  <line id="ae6"  x1="165" y1="185" x2="233" y2="185" class="conn-line" opacity="0" marker-end="url(#arr-teal)"/>
+  <line id="ae7"  x1="395" y1="185" x2="493" y2="185" class="conn-line" opacity="0" marker-end="url(#arr-teal)"/>
+  <line id="ae8"  x1="315" y1="231" x2="315" y2="268" class="conn-line" opacity="0" marker-end="url(#arr-teal)"/>
+  <path id="ae9"  d="M90,311 C90,340 235,295 235,295"  class="conn-line" fill="none" opacity="0" marker-end="url(#arr-amber)"/>
+  <line id="ae10" x1="395" y1="315" x2="493" y2="315" class="conn-line" opacity="0" marker-end="url(#arr-amber)"/>
+  <path id="ae11" d="M90,400 C90,365 225,330 225,315"  class="conn-line" fill="none" opacity="0" marker-end="url(#arr-teal)"/>
+  <line id="ae12" x1="315" y1="361" x2="315" y2="398" class="conn-line" opacity="0" marker-end="url(#arr-purple)"/>
+  <line id="ae13" x1="395" y1="315" x2="493" y2="445" class="conn-line" opacity="0" marker-end="url(#arr-purple)"/>
+  <path id="ae14" d="M165,575 C200,575 225,340 225,315" class="conn-line" fill="none" opacity="0" marker-end="url(#arr-teal)"/>
+  <path id="ae15" d="M395,361 C448,361 493,555 493,555" class="conn-line" fill="none" opacity="0" marker-end="url(#arr-purple)"/>
+  <path id="ae16" d="M575,530 C575,420 435,361 395,361" class="conn-line" fill="none" opacity="0" marker-end="url(#arr-teal)"/>
+  <path id="ae17" d="M315,361 C315,500 315,630 315,658" class="conn-line" fill="none" opacity="0" marker-end="url(#arr-teal)"/>
+  <path id="ae18" d="M575,621 C575,680 397,700 397,700" class="conn-line" fill="none" opacity="0" marker-end="url(#arr-purple)"/>
+  <path id="ae19" d="M265,151 C200,130 130,111 90,111"  class="conn-line" fill="none" opacity="0" marker-end="url(#arr-navy)"/>
+
+  <!-- ROW 1: Hospital HIS -->
+  <g class="actor-node idle" id="node-his" data-tip="Hospital HIS — Epic/Cerner/MEDITECH. Sends HL7v2 ADT, ORU, ORM, SIU, RDE via MLLP :2575-:2582 to JamBridge.">
+    <rect x="15" y="20" width="150" height="90" rx="10"/>
+    <g clip-path="url(#cp-his)">
+      <rect x="22" y="23" width="24" height="13" rx="4" fill="rgba(27,79,138,.12)"/>
+      <text x="34" y="33" text-anchor="middle" font-size="8" font-weight="700" fill="#3D6A8A" font-family="sans-serif">HIS</text>
+      <text x="90" y="52" text-anchor="middle" font-size="13" font-weight="700" class="node-title">Hospital HIS</text>
+      <text x="90" y="67" text-anchor="middle" font-size="11" class="node-sub">Epic / Cerner / MEDITECH</text>
+      <text x="90" y="81" text-anchor="middle" font-size="10.5" class="node-sub">ADT · ORU · ORM · SIU · RDE</text>
+      <text x="90" y="97" text-anchor="middle" font-size="9.5" class="node-sub">MLLP :2575–:2582</text>
+    </g>
+  </g>
+
+  <!-- ROW 1: Clinician Portal -->
+  <g class="actor-node idle" id="node-clin" data-tip="Clinician Portal — SMART App Launch v2.2. PKCE S256. Cross-branch IPS summary, lab results, imaging, referrals.">
+    <rect x="235" y="20" width="160" height="90" rx="10"/>
+    <g clip-path="url(#cp-clin)">
+      <circle cx="253" cy="47" r="9" fill="none" stroke="#1B4F8A" stroke-width="1" opacity=".3"/>
+      <line x1="244" y1="47" x2="262" y2="47" stroke="#1B4F8A" stroke-width=".8" opacity=".3"/>
+      <ellipse cx="253" cy="47" rx="4" ry="9" fill="none" stroke="#1B4F8A" stroke-width=".8" opacity=".3"/>
+      <text x="315" y="52" text-anchor="middle" font-size="13" font-weight="700" class="node-title">Clinician Portal</text>
+      <text x="315" y="67" text-anchor="middle" font-size="11" class="node-sub">SMART App Launch v2.2</text>
+      <text x="315" y="81" text-anchor="middle" font-size="10.5" class="node-sub">Dr. Perera · PKCE S256</text>
+      <text x="315" y="97" text-anchor="middle" font-size="9.5" class="node-sub">IPS · labs · imaging · referrals</text>
+    </g>
+  </g>
+
+  <!-- ROW 1: Auth Server -->
+  <g class="actor-node idle" id="node-auth" data-tip="AJ FHIR Auth Server — Spring AS 1.3, SMART v2.2, PKCE S256, RS256. Hospital Azure AD / Okta federation. Launch context.">
+    <rect x="495" y="20" width="160" height="90" rx="10"/>
+    <g clip-path="url(#cp-auth)">
+      <rect x="503" y="23" width="14" height="11" rx="2" fill="rgba(27,79,138,.18)"/>
+      <path d="M506 23 v-3 a3 3 0 0 1 6 0 v3" fill="none" stroke="rgba(27,79,138,.5)" stroke-width="1.3"/>
+      <text x="575" y="52" text-anchor="middle" font-size="13" font-weight="700" class="node-title">Auth Server</text>
+      <text x="575" y="67" text-anchor="middle" font-size="11" class="node-sub">Spring AS 1.3 · SMART v2.2</text>
+      <text x="575" y="81" text-anchor="middle" font-size="10.5" class="node-sub">PKCE S256 · RS256</text>
+      <text x="575" y="97" text-anchor="middle" font-size="9.5" class="node-sub">Azure AD / Okta · SSO · :9000</text>
+    </g>
+  </g>
+
+  <!-- ROW 2: JamMPI -->
+  <g class="actor-node idle" id="node-mpi" data-tip="JamMPI — Master Patient Index. Probabilistic matching across branches. ITI-78, ITI-83, PMIR. Golden records unify identity. :8081">
+    <rect x="15" y="140" width="150" height="90" rx="10"/>
+    <g clip-path="url(#cp-mpi)">
+      <rect x="22" y="143" width="26" height="13" rx="4" fill="rgba(13,122,110,.12)"/>
+      <text x="35" y="153" text-anchor="middle" font-size="8" font-weight="700" fill="#0D7A6E" font-family="sans-serif">MPI</text>
+      <text x="90" y="172" text-anchor="middle" font-size="13" font-weight="700" class="node-title">JamMPI</text>
+      <text x="90" y="187" text-anchor="middle" font-size="11" class="node-sub">Patient identity · :8081</text>
+      <text x="90" y="201" text-anchor="middle" font-size="10.5" class="node-sub">Golden records</text>
+      <text x="90" y="215" text-anchor="middle" font-size="9.5" class="node-sub">ITI-78 · ITI-83 · PMIR</text>
+    </g>
+  </g>
+
+  <!-- ROW 2: JamBridge -->
+  <g class="actor-node idle" id="node-jb" data-tip="JamBridge — HL7v2-to-FHIR integration engine. MLLP on 8 ports. 7-stage pipeline. :8443">
+    <rect x="235" y="140" width="160" height="90" rx="10"/>
+    <g clip-path="url(#cp-jb)">
+      <rect x="243" y="143" width="52" height="13" rx="4" fill="rgba(27,79,138,.18)"/>
+      <text x="269" y="153" text-anchor="middle" font-size="8" font-weight="700" fill="#1B4F8A" font-family="sans-serif">GATEWAY</text>
+      <text x="315" y="172" text-anchor="middle" font-size="13" font-weight="700" class="node-title">JamBridge</text>
+      <text x="315" y="187" text-anchor="middle" font-size="11" class="node-sub">HL7v2 → FHIR R4 · :8443</text>
+      <text x="315" y="201" text-anchor="middle" font-size="10.5" class="node-sub">7-stage pipeline</text>
+      <text x="315" y="215" text-anchor="middle" font-size="9.5" class="node-sub">MLLP :2575–:2582</text>
+    </g>
+  </g>
+
+  <!-- ROW 2: JamGuard -->
+  <g class="actor-node idle" id="node-guard" data-tip="JamGuard — Cross-branch clinical safety. DDI via NLM RxNorm. Drug-allergy, missed follow-up, polypharmacy. :8094">
+    <rect x="495" y="140" width="160" height="90" rx="10"/>
+    <g clip-path="url(#cp-guard)">
+      <rect x="503" y="143" width="42" height="13" rx="4" fill="rgba(83,74,183,.12)"/>
+      <text x="524" y="153" text-anchor="middle" font-size="8" font-weight="700" fill="#534AB7" font-family="sans-serif">SAFETY</text>
+      <text x="575" y="172" text-anchor="middle" font-size="13" font-weight="700" class="node-title">JamGuard</text>
+      <text x="575" y="187" text-anchor="middle" font-size="11" class="node-sub">Clinical safety · :8094</text>
+      <text x="575" y="201" text-anchor="middle" font-size="10.5" class="node-sub">DDI · allergy · follow-up</text>
+      <text x="575" y="215" text-anchor="middle" font-size="9.5" class="node-sub">NLM RxNorm · cross-branch</text>
+    </g>
+  </g>
+
+  <!-- ROW 3: Lab/LIS -->
+  <g class="actor-node idle" id="node-lab" data-tip="Lab / LIS — ORU^R01 via MLLP :2576. Observation + DiagnosticReport FHIR R4. LOINC coded. Critical value detection.">
+    <rect x="15" y="270" width="150" height="90" rx="10"/>
+    <g clip-path="url(#cp-lab)">
+      <rect x="22" y="273" width="22" height="13" rx="4" fill="rgba(133,77,14,.12)"/>
+      <text x="33" y="283" text-anchor="middle" font-size="8" font-weight="700" fill="#854D0E" font-family="sans-serif">LAB</text>
+      <text x="90" y="302" text-anchor="middle" font-size="13" font-weight="700" class="node-title">Lab / LIS</text>
+      <text x="90" y="317" text-anchor="middle" font-size="11" class="node-sub">ORU · Observation</text>
+      <text x="90" y="331" text-anchor="middle" font-size="10.5" class="node-sub">DiagnosticReport · LOINC</text>
+      <text x="90" y="345" text-anchor="middle" font-size="9.5" class="node-sub">MLLP :2576 · critical values</text>
+    </g>
+  </g>
+
+  <!-- ROW 3: HAPI FHIR -->
+  <g class="actor-node idle" id="node-hapi" data-tip="HAPI FHIR JPA :8080 — FHIR R4 repository. SmartScopeInterceptor + ConsentEnforcementInterceptor. Circuit breaker.">
+    <rect x="235" y="270" width="160" height="90" rx="10"/>
+    <g clip-path="url(#cp-hapi)">
+      <ellipse cx="252" cy="286" rx="8" ry="3.5" fill="none" stroke="rgba(13,122,110,.4)" stroke-width="1.2"/>
+      <line x1="244" y1="286" x2="244" y2="296" stroke="rgba(13,122,110,.4)" stroke-width="1.2"/>
+      <line x1="260" y1="286" x2="260" y2="296" stroke="rgba(13,122,110,.4)" stroke-width="1.2"/>
+      <ellipse cx="252" cy="296" rx="8" ry="3.5" fill="none" stroke="rgba(13,122,110,.4)" stroke-width="1.2"/>
+      <text x="315" y="298" text-anchor="middle" font-size="13" font-weight="700" class="node-title">HAPI FHIR</text>
+      <text x="315" y="313" text-anchor="middle" font-size="11" class="node-sub">:8080 · R4 · JPA</text>
+      <text x="315" y="327" text-anchor="middle" font-size="10.5" class="node-sub">Scope interceptor</text>
+      <text x="315" y="341" text-anchor="middle" font-size="9.5" class="node-sub">Consent interceptor</text>
+    </g>
+  </g>
+
+  <!-- ROW 3: Consent Manager -->
+  <g class="actor-node idle" id="node-consent" data-tip="AJ Consent Manager — FHIR R4 Consent lifecycle. ConsentEnforcementInterceptor. deny-by-default. GDPR/HIPAA. :8082">
+    <rect x="495" y="270" width="160" height="90" rx="10"/>
+    <g clip-path="url(#cp-co)">
+      <rect x="503" y="273" width="14" height="11" rx="2" fill="rgba(13,122,110,.15)"/>
+      <path d="M506 273 v-3 a3 3 0 0 1 6 0 v3" fill="none" stroke="rgba(13,122,110,.5)" stroke-width="1.2"/>
+      <text x="575" y="298" text-anchor="middle" font-size="13" font-weight="700" class="node-title">Consent Manager</text>
+      <text x="575" y="313" text-anchor="middle" font-size="11" class="node-sub">FHIR Consent · GDPR</text>
+      <text x="575" y="327" text-anchor="middle" font-size="10.5" class="node-sub">Enforcement Interceptor</text>
+      <text x="575" y="341" text-anchor="middle" font-size="9.5" class="node-sub">deny-by-default · :8082</text>
+    </g>
+  </g>
+
+  <!-- ROW 4: JamSHR -->
+  <g class="actor-node idle" id="node-shr" data-tip="JamSHR — Shared Health Record. IPS $summary cross-branch. IHE MHD ITI-65/67/68. IPS cache + invalidation. :8084">
+    <rect x="15" y="400" width="150" height="90" rx="10"/>
+    <g clip-path="url(#cp-shr)">
+      <rect x="22" y="403" width="26" height="13" rx="4" fill="rgba(13,122,110,.12)"/>
+      <text x="35" y="413" text-anchor="middle" font-size="8" font-weight="700" fill="#0D7A6E" font-family="sans-serif">SHR</text>
+      <text x="90" y="432" text-anchor="middle" font-size="13" font-weight="700" class="node-title">JamSHR</text>
+      <text x="90" y="447" text-anchor="middle" font-size="11" class="node-sub">Shared Health Record</text>
+      <text x="90" y="461" text-anchor="middle" font-size="10.5" class="node-sub">IPS $summary · :8084</text>
+      <text x="90" y="475" text-anchor="middle" font-size="9.5" class="node-sub">IHE MHD · ITI-65/67/68</text>
+    </g>
+  </g>
+
+  <!-- ROW 4: PACS/DICOM -->
+  <g class="actor-node idle" id="node-pacs" data-tip="PACS / DICOM — ImagingStudy FHIR R4. WADO-RS DICOMweb. Radiologist DiagnosticReport linked to ServiceRequest order.">
+    <rect x="235" y="400" width="160" height="90" rx="10"/>
+    <g clip-path="url(#cp-pacs)">
+      <rect x="243" y="403" width="24" height="13" rx="4" fill="rgba(83,74,183,.12)"/>
+      <text x="255" y="413" text-anchor="middle" font-size="8" font-weight="700" fill="#534AB7" font-family="sans-serif">PACS</text>
+      <text x="315" y="432" text-anchor="middle" font-size="13" font-weight="700" class="node-title">PACS / DICOM</text>
+      <text x="315" y="447" text-anchor="middle" font-size="11" class="node-sub">ImagingStudy WADO-RS</text>
+      <text x="315" y="461" text-anchor="middle" font-size="10.5" class="node-sub">DICOMweb endpoint</text>
+      <text x="315" y="475" text-anchor="middle" font-size="9.5" class="node-sub">Chest X-ray · CT · MRI</text>
+    </g>
+  </g>
+
+  <!-- ROW 4: JamTS -->
+  <g class="actor-node idle" id="node-ts" data-tip="JamTS — Terminology Service. $lookup, $translate, $validate. LOINC, SNOMED CT, ICD-10. Snowstorm federation. :8085">
+    <rect x="495" y="400" width="160" height="90" rx="10"/>
+    <g clip-path="url(#cp-ts)">
+      <rect x="503" y="403" width="20" height="13" rx="4" fill="rgba(83,74,183,.12)"/>
+      <text x="513" y="413" text-anchor="middle" font-size="8" font-weight="700" fill="#534AB7" font-family="sans-serif">TS</text>
+      <text x="575" y="432" text-anchor="middle" font-size="13" font-weight="700" class="node-title">JamTS</text>
+      <text x="575" y="447" text-anchor="middle" font-size="11" class="node-sub">Terminology Service · :8085</text>
+      <text x="575" y="461" text-anchor="middle" font-size="10.5" class="node-sub">LOINC · SNOMED · ICD-10</text>
+      <text x="575" y="475" text-anchor="middle" font-size="9.5" class="node-sub">$translate · Snowstorm</text>
+    </g>
+  </g>
+
+  <!-- ROW 5: JamConnect -->
+  <g class="actor-node idle" id="node-jconn" data-tip="JamConnect — Clinical intelligence hub. Coordinates MPI, Consent, Facility. CDS Hooks dispatch. POST_WRITE event processing. IPS cache invalidation. :8091">
+    <rect x="15" y="530" width="150" height="90" rx="10"/>
+    <g clip-path="url(#cp-jconn)">
+      <rect x="22" y="533" width="44" height="13" rx="4" fill="rgba(13,122,110,.12)"/>
+      <text x="44" y="543" text-anchor="middle" font-size="8" font-weight="700" fill="#0D7A6E" font-family="sans-serif">CONNECT</text>
+      <text x="90" y="562" text-anchor="middle" font-size="13" font-weight="700" class="node-title">JamConnect</text>
+      <text x="90" y="577" text-anchor="middle" font-size="11" class="node-sub">Clinical intelligence · :8091</text>
+      <text x="90" y="591" text-anchor="middle" font-size="10.5" class="node-sub">CDS Hooks dispatch</text>
+      <text x="90" y="605" text-anchor="middle" font-size="9.5" class="node-sub">IPS invalidation · alerts</text>
+    </g>
+  </g>
+
+  <!-- ROW 5: Pharmacy -->
+  <g class="actor-node idle" id="node-pharma" data-tip="Pharmacy — RDE^O11 prescriptions via MLLP :2580. MedicationRequest FHIR R4. Cross-branch medication history via golden record.">
+    <rect x="235" y="530" width="160" height="90" rx="10"/>
+    <g clip-path="url(#cp-pharma)">
+      <rect x="243" y="533" width="32" height="13" rx="4" fill="rgba(83,74,183,.12)"/>
+      <text x="259" y="543" text-anchor="middle" font-size="8" font-weight="700" fill="#534AB7" font-family="sans-serif">PHARMA</text>
+      <text x="315" y="562" text-anchor="middle" font-size="13" font-weight="700" class="node-title">Pharmacy</text>
+      <text x="315" y="577" text-anchor="middle" font-size="11" class="node-sub">RDE · MedicationRequest</text>
+      <text x="315" y="591" text-anchor="middle" font-size="10.5" class="node-sub">DDI safety · MLLP :2580</text>
+      <text x="315" y="605" text-anchor="middle" font-size="9.5" class="node-sub">cross-branch drug history</text>
+    </g>
+  </g>
+
+  <!-- ROW 5: JamReferral -->
+  <g class="actor-node idle" id="node-ref" data-tip="JamReferral — Cross-branch referral state machine. FHIR ServiceRequest + Task. 5 states, 48h accept timeout. Consent checked before dispatch. :8093">
+    <rect x="495" y="530" width="160" height="90" rx="10"/>
+    <g clip-path="url(#cp-ref)">
+      <rect x="503" y="533" width="24" height="13" rx="4" fill="rgba(13,122,110,.12)"/>
+      <text x="515" y="543" text-anchor="middle" font-size="8" font-weight="700" fill="#0D7A6E" font-family="sans-serif">REF</text>
+      <text x="575" y="562" text-anchor="middle" font-size="13" font-weight="700" class="node-title">JamReferral</text>
+      <text x="575" y="577" text-anchor="middle" font-size="11" class="node-sub">Cross-branch referral · :8093</text>
+      <text x="575" y="591" text-anchor="middle" font-size="10.5" class="node-sub">SR + Task state machine</text>
+      <text x="575" y="605" text-anchor="middle" font-size="9.5" class="node-sub">48h timeout · 5 states</text>
+    </g>
+  </g>
+
+  <!-- ROW 6: Audit Store -->
+  <g class="actor-node idle" id="node-audit" data-tip="Audit Store — IHE ATNA AuditEvent. PostgreSQL async. Non-repudiation. HIPAA 164.312, GDPR Art.30.">
+    <rect x="235" y="660" width="160" height="90" rx="10"/>
+    <g clip-path="url(#cp-audit)">
+      <ellipse cx="252" cy="676" rx="8" ry="3.5" fill="none" stroke="rgba(13,122,110,.4)" stroke-width="1.2"/>
+      <line x1="244" y1="676" x2="244" y2="686" stroke="rgba(13,122,110,.4)" stroke-width="1.2"/>
+      <line x1="260" y1="676" x2="260" y2="686" stroke="rgba(13,122,110,.4)" stroke-width="1.2"/>
+      <ellipse cx="252" cy="686" rx="8" ry="3.5" fill="none" stroke="rgba(13,122,110,.4)" stroke-width="1.2"/>
+      <text x="315" y="688" text-anchor="middle" font-size="13" font-weight="700" class="node-title">Audit Store</text>
+      <text x="315" y="703" text-anchor="middle" font-size="11" class="node-sub">AuditEvent · ATNA</text>
+      <text x="315" y="717" text-anchor="middle" font-size="10.5" class="node-sub">PostgreSQL · async</text>
+      <text x="315" y="731" text-anchor="middle" font-size="9.5" class="node-sub">HIPAA · GDPR Art.30</text>
+    </g>
+  </g>
+
+  <!-- Legend -->
+  <g transform="translate(15,762)">
+    <text x="0" y="0" font-size="11" fill="#1E3D58" font-weight="700" font-family="sans-serif">Legend</text>
+    <rect x="0"   y="7" width="12" height="8" rx="2" fill="#1B4F8A"/>
+    <text x="16"  y="16" font-size="10" fill="#3D6A8A" font-family="sans-serif">Auth / SMART</text>
+    <rect x="106" y="7" width="12" height="8" rx="2" fill="#0D7A6E"/>
+    <text x="122" y="16" font-size="10" fill="#3D6A8A" font-family="sans-serif">FHIR / Identity</text>
+    <rect x="222" y="7" width="12" height="8" rx="2" fill="#854D0E"/>
+    <text x="238" y="16" font-size="10" fill="#3D6A8A" font-family="sans-serif">Lab / Audit</text>
+    <rect x="318" y="7" width="12" height="8" rx="2" fill="#534AB7"/>
+    <text x="334" y="16" font-size="10" fill="#3D6A8A" font-family="sans-serif">Imaging / Pharma / Safety</text>
+    <rect x="490" y="7" width="12" height="8" rx="2" fill="#FFFFFF" stroke="#C8DFF0" stroke-width="1.5"/>
+    <text x="506" y="16" font-size="10" fill="#3D6A8A" font-family="sans-serif">Idle</text>
+    <circle cx="546" cy="11" r="4.5" fill="#0A7A6E"/>
+    <text x="555" y="16" font-size="10" fill="#3D6A8A" font-family="sans-serif">Packet</text>
+  </g>
+
+  <circle id="packet-dot" class="packet" r="5" cx="0" cy="0" opacity="0"/>
+  </svg>
+  </div>
+</div>
+
+<div class="panel" id="panel-http">
+  <div class="panel-header">
+    <div class="panel-dot navy"></div>
+    <div class="panel-title">HTTP · Request / Response</div>
+    <div class="panel-badge" id="http-badge">—</div>
+  </div>
+  <div class="panel-body">
+    <div class="code-scroll" id="http-content">
+      <div class="idle-state">
+        <div class="idle-icon">⇄</div>
+        <div>HTTP packets will appear here</div>
+        <div style="color:#3D6A8A;font-size:11px;">Press ▶ to start the simulation</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="bottom-right">
+  <div class="panel" id="panel-token">
+    <div class="panel-header teal-hdr">
+      <div class="panel-dot teal"></div>
+      <div class="panel-title">Pipeline · Stage Detail</div>
+      <div class="panel-badge" id="token-badge">—</div>
+    </div>
+    <div class="panel-body">
+      <div class="code-scroll" id="token-content">
+        <div class="idle-state"><div class="idle-icon">⚙</div><div>Stage detail will appear here</div></div>
+      </div>
+    </div>
+  </div>
+  <div class="panel" id="panel-audit">
+    <div class="panel-header teal-hdr">
+      <div class="panel-dot warn"></div>
+      <div class="panel-title">Audit Log · FHIR AuditEvent</div>
+      <div class="panel-badge" id="audit-badge">0 events</div>
+    </div>
+    <div class="panel-body">
+      <div class="code-scroll" id="audit-content">
+        <div class="idle-state"><div class="idle-icon">📋</div><div>Audit events will accumulate here</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</div>
+
+<div id="bottombar">
+  <div id="step-dots" style="position:relative;display:flex;align-items:center;gap:4px;flex:1;"></div>
+  <div class="tb-sep"></div>
+  <div id="step-label">Select a step or press play</div>
+  <div style="flex:1;"></div>
+  <div id="step-counter">0 / 26</div>
+  <div id="controls">
+    <select class="speed-select" id="speed-select">
+      <option value="0.5">0.5x</option>
+      <option value="1" selected>1x</option>
+      <option value="2">2x</option>
+      <option value="3">3x</option>
+    </select>
+    <button class="ctrl-btn" id="btn-restart" title="Restart (R)">&#x21BA;</button>
+    <button class="ctrl-btn" id="btn-prev" title="Previous">&#x25C0;</button>
+    <button class="ctrl-btn primary" id="btn-play" title="Play (Space)">&#x25B6;</button>
+    <button class="ctrl-btn" id="btn-next" title="Next">&#x25B6;&#x25B6;</button>
+  </div>
+</div>
+
+</div>
+<script>
+(function() {
+"use strict";
+
+/* ── tooltip ── */
+var tooltip = document.getElementById('tooltip');
+document.querySelectorAll('.actor-node').forEach(function(node) {
+  node.style.cursor = 'pointer';
+  node.addEventListener('mouseenter', function() {
+    var tip = node.dataset.tip; if (!tip) return;
+    tooltip.textContent = tip; tooltip.style.display = 'block';
+  });
+  node.addEventListener('mousemove', function(e) {
+    tooltip.style.left = (e.clientX+14)+'px';
+    tooltip.style.top  = (e.clientY-8)+'px';
+  });
+  node.addEventListener('mouseleave', function() { tooltip.style.display='none'; });
+});
+
+/* ── DOM refs ── */
+var D = {
+  http:    document.getElementById('http-content'),
+  token:   document.getElementById('token-content'),
+  audit:   document.getElementById('audit-content'),
+  dots:    document.getElementById('step-dots'),
+  label:   document.getElementById('step-label'),
+  counter: document.getElementById('step-counter'),
+  flow:    document.getElementById('flow-step-label'),
+  hBadge:  document.getElementById('http-badge'),
+  tBadge:  document.getElementById('token-badge'),
+  aBadge:  document.getElementById('audit-badge'),
+  play:    document.getElementById('btn-play'),
+  prev:    document.getElementById('btn-prev'),
+  next:    document.getElementById('btn-next'),
+  restart: document.getElementById('btn-restart'),
+  speed:   document.getElementById('speed-select'),
+};
+
+
+const LAYERS = {
+  receive:   { label:'RECEIVE',   color:'#1B4F8A', bg:'rgba(27,79,138,.10)' },
+  enrich:    { label:'ENRICH',    color:'#0D7A6E', bg:'rgba(13,122,110,.10)' },
+  transform: { label:'TRANSFORM', color:'#534AB7', bg:'rgba(83,74,183,.10)' },
+  govern:    { label:'GOVERN',    color:'#854D0E', bg:'rgba(133,77,14,.10)'  },
+  persist:   { label:'PERSIST',   color:'#0D7A6E', bg:'rgba(13,122,110,.10)' },
+  dispatch:  { label:'DISPATCH',  color:'#0D7A6E', bg:'rgba(13,122,110,.10)' },
+  ack:       { label:'ACK',       color:'#1B4F8A', bg:'rgba(27,79,138,.10)' },
+  smart:     { label:'SMART',     color:'#1B4F8A', bg:'rgba(27,79,138,.10)' },
+  lab:       { label:'LAB',       color:'#854D0E', bg:'rgba(133,77,14,.10)'  },
+  pacs:      { label:'IMAGING',   color:'#534AB7', bg:'rgba(83,74,183,.10)' },
+  pharma:    { label:'PHARMACY',  color:'#534AB7', bg:'rgba(83,74,183,.10)' },
+  consent:   { label:'CONSENT',   color:'#0D7A6E', bg:'rgba(13,122,110,.10)' },
+  audit:     { label:'AUDIT',     color:'#854D0E', bg:'rgba(133,77,14,.10)'  },
+  safety:    { label:'SAFETY',    color:'#534AB7', bg:'rgba(83,74,183,.10)' },
+  referral:  { label:'REFERRAL',  color:'#0D7A6E', bg:'rgba(13,122,110,.10)' },
+};
+
+const STEPS = [
+{n:1,layer:'receive',label:'Hospital HIS sends ADT^A01 via MLLP :2575',
+ nodes:['node-his','node-jb'],conns:['ae1','ae4'],badge:'ADT^A01 received',
+ isCentrepiece:false,
+ http:'MSH|^~\\&|HHIMS|BRANCH-01|JAMBRIDGE|CHAIN|20260612143022||ADT^A01|BR01-001|P|2.5\nEVN|A01|20260612143022|||\nPID|1||MRN123456^^^BR01^MR||FERNANDO^KAMAL^P||19850314|M\nPV1|1|I|GEN-WARD-2B^BED-12^BR01|||DR-001^PERERA^SUNIL^DR|||MED||||ADM\n\n# JamBridge MLLP consumer receives on :2575\n# txId: BR01-26060612-001 assigned',
+ detail:'Stage: RECEIVE\nPort: :2575 (ADT route)\nFacility: BRANCH-01\nChannel: br01-his-adt\nTxID: BR01-26060612-001',
+ audit:null},
+
+{n:2,layer:'receive',label:'MSH-10 dedup check + HL7v2 parsed',
+ nodes:['node-jb'],conns:[],badge:'Dedup PASS',isCentrepiece:false,
+ http:'# MessageIdempotencyFilter — 24h window\nSELECT count(*) FROM hie_transaction_log\n  WHERE message_control_id = \'BR01-001\'\n  AND started_at > NOW() - INTERVAL \'24 hours\';\n\n-> count = 0  not a duplicate\n\n# Hl7v2Parser (HAPI HL7v2 Terser):\n{\n  "sendingFacility": "BRANCH-01",\n  "patientIdLocal":  "MRN123456",\n  "familyName":      "FERNANDO",\n  "givenName":       "KAMAL PRADEEP",\n  "ward": "GEN-WARD-2B", "bed": "BED-12"\n}',
+ detail:'Stage: RECEIVE\nDedup: MSH-10 24h window\nParser: HAPI HL7v2 Terser\nSegments: MSH PID PV1 EVN\nDuration: ~3ms',
+ audit:null},
+
+{n:3,layer:'enrich',label:'ENRICH — JamFR ITI-90 + JamMPI $match',
+ nodes:['node-jb','node-mpi'],conns:['ae6'],badge:'CERTAIN 0.97',isCentrepiece:false,
+ http:'# FacilityCodeResolver -> JamFR :8089 (ITI-90)\nGET /fhir/Organization?identifier=BRANCH-01\n-> org-br01-001 "Apollo Chain Branch 01"\n\n# MpiClientService -> JamMPI :8081 (ITI-119)\nPOST /fhir/Patient/$match\n\nHTTP/1.1 200 OK\n{\n  "id": "GOLDEN-00441",\n  "extension": [\n    {"url":"match-grade","valueString":"certain"},\n    {"url":"match-score","valueDecimal":0.97},\n    {"url":"seen-at","valueString":"BR01,BR03,BR07"}\n  ]\n}',
+ detail:'Stage: ENRICH\nITI-90: BRANCH-01 -> org-br01-001\nITI-119 $match: CERTAIN 0.97\nGolden ID: GOLDEN-00441\nBranches linked: 3\nAlgorithm: MRN + Jaro-Winkler',
+ audit:null},
+
+{n:4,layer:'transform',label:'TRANSFORM — HL7v2 -> FHIR R4 + JamTS $translate',
+ nodes:['node-jb','node-ts'],conns:['ae13'],badge:'ADT -> FHIR R4',isCentrepiece:false,
+ http:'# Hl7v2ToFhirMapper: PID/PV1 -> FHIR R4\n{\n  "resourceType": "Patient",\n  "meta": {"source":"facility:BRANCH-01"},\n  "link": [{"type":"refer","other":{"reference":"Patient/GOLDEN-00441"}}]\n}\n# Encounter from PV1 also built\n\n# JamTS :8085 -> $translate local codes to LOINC\nGET /fhir/ConceptMap/$translate?system=urn:br01.local&code=GLU&target=loinc\n\nHTTP/1.1 200 OK\n{"match":[{"concept":{"code":"1558-6","display":"Fasting glucose"}}]}',
+ detail:'Stage: TRANSFORM\nMapper: Hl7v2ToFhirMapper\nPID -> Patient (golden linked)\nPV1 -> Encounter\nJamTS $translate: local->LOINC\nSnowstorm: SNOMED CT\nDuration: ~11ms',
+ audit:null},
+
+{n:5,layer:'govern',label:'GOVERN — AJ Consent check via JamConnect',
+ nodes:['node-jb','node-consent','node-jconn'],conns:['ae14','ae10'],
+ badge:'Consent PERMITTED',isCentrepiece:true,centreLabel:'🔐 Consent enforcement',
+ http:'POST /jamconnect/consent/check HTTP/1.1\nHost: jam-connect:8091\n{\n  "patientRef":   "Patient/GOLDEN-00441",\n  "actorRef":     "Organization/org-br01-001",\n  "resourceType": "Patient",\n  "action":       "write",\n  "purpose":      "TREAT"\n}\n# JamConnect -> AJ Consent Manager :8082\n\nHTTP/1.1 200 OK\n{\n  "permitted": true,\n  "policyRef": "Consent/chain-consent-00441",\n  "purpose":   "TREAT",\n  "scope":     "chain-internal-sharing"\n}\n# fail-closed: NACK if consent service unreachable',
+ detail:'Stage: GOVERN\nMode: fail-closed\nFacade: JamConnect :8091\nAuthority: AJ Consent :8082\nResult: PERMITTED\nPurpose: TREAT\nPolicy: chain-consent-00441',
+ audit:{type:'Consent PERMITTED',resource:'Consent/chain-consent-00441',outcome:'0',color:'#0A5A50'}},
+
+{n:6,layer:'persist',label:'PERSIST — HAPI FHIR conditional update',
+ nodes:['node-jb','node-hapi'],conns:['ae8'],badge:'PUT Patient v3',isCentrepiece:false,
+ http:'PUT /fhir/Patient?identifier=urn:chain.internal/mrn|MRN123456 HTTP/1.1\nHost: hapi-fhir:8080\n\nHTTP/1.1 200 OK\nLocation: /fhir/Patient/MRN123456/_history/3\nETag: "3"\n\nPOST /fhir/Encounter HTTP/1.1\nHTTP/1.1 201 Created\nLocation: /fhir/Encounter/enc-441-br01/_history/1\n\n# ConsentEnforcementInterceptor fired before write\n# SmartScopeInterceptor validated service account\n# Circuit breaker: CLOSED',
+ detail:'Stage: PERSIST\nCircuit breaker: CLOSED\nPatient: MRN123456 v3\nEncounter: enc-441-br01 v1\nConsent interceptor: fired\nDuration: ~180ms',
+ audit:{type:'FHIR Patient write',resource:'Patient/MRN123456',outcome:'0',color:'#0D7A6E'}},
+
+{n:7,layer:'dispatch',label:'DISPATCH — subscriptions + JamConnect POST_WRITE',
+ nodes:['node-jb','node-jconn'],conns:['ae14'],badge:'3 channels + JamConnect',isCentrepiece:false,
+ http:'# SubscriptionEventDispatcher: 17 seeded subs\n# "Patient?" -> match -> 3 outbound channels\n  [1] MLLP: lis.br01.chain:2575 -> ADT A08\n  [2] FHIR_REST: chain-shr.internal/fhir\n  [3] FHIR_REST: br03.chain.internal/fhir\n\nPOST /jamconnect/events\n{\n  "eventType": "POST_WRITE",\n  "resourceType": "Patient",\n  "patientGoldenId": "GOLDEN-00441"\n}\nHTTP/1.1 202 Accepted\n{"rulesEvaluated":5,"rulesFired":2,"ipsInvalidated":true}',
+ detail:'Seeded subs: 17\nMatched: Patient?\nChannels: 3 outbound\nJamConnect rules: 5 evaluated\n  IPS invalidated\n  CDS Hooks dispatched',
+ audit:null},
+
+{n:8,layer:'ack',label:'ACK — HL7v2 AA back to Hospital HIS',
+ nodes:['node-jb','node-his'],conns:['ae19'],badge:'ACK AA sent',isCentrepiece:false,
+ http:'MSH|^~\\&|JAMBRIDGE|CHAIN|HHIMS|BR01|20260612143027||ACK^A01^ACK|ACK-001|P|2.5\nMSA|AA|BR01-001|Patient admitted stored in chain FHIR\n\n# Transaction log finalised:\n{\n  "txId":    "BR01-26060612-001",\n  "status":  "SUCCESS",\n  "durationMs": 4821,\n  "golden":  "GOLDEN-00441"\n}',
+ detail:'Stage: ACK\nACK code: AA (accept)\nDuration: 4821ms\nStatus: SUCCESS\nGolden: GOLDEN-00441\nBranches unified: 3',
+ audit:null},
+
+{n:9,layer:'smart',label:'Clinician portal — SMART App Launch v2.2',
+ nodes:['node-clin','node-auth'],conns:['ae2','ae3'],badge:'SMART launch',isCentrepiece:false,
+ http:'# Dr. Perera opens chain clinical portal\nGET /launch?iss=https://hapi-fhir:8080/fhir\n         &launch=a8f3d2c1... (one-time token)\n\nGET /.well-known/smart-configuration HTTP/1.1\nHost: hapi-fhir:8080\n# SmartDiscoveryProxyFilter -> Auth Server :9000\n\n# PKCE S256 generated (RFC 7636)\n# 96-byte verifier, 768-bit entropy\ncode_challenge = SHA-256(verifier) -> base64url\n\nGET /oauth2/authorize HTTP/1.1\nHost: auth-server:9000\n?code_challenge=E9Melhoa2OwvFr...\n&code_challenge_method=S256\n# -> 302 -> Hospital Azure AD (oauth2Login)',
+ detail:'Stage: SMART LAUNCH\nAuth Server: Spring AS 1.3\nPKCE: S256 enforced (RFC 7636)\nIdP: Hospital Azure AD\nVerifier: 96 bytes 768-bit\nLaunch token: atomic INSERT',
+ audit:null},
+
+{n:10,layer:'smart',label:'Token response — patient context top-level JSON',
+ nodes:['node-auth','node-clin'],conns:['ae2'],badge:'200 token response',
+ isCentrepiece:true,centreLabel:'★ SMART token response',
+ http:'POST /oauth2/token HTTP/1.1\ncode_verifier = dBjftJeZ4CVP...\n# Auth Server: SHA-256(verifier) == challenge\n\nHTTP/1.1 200 OK\n{\n  "access_token":        "eyJhbGciOiJSUzI1NiI...",\n  "token_type":          "Bearer",\n  "expires_in":          3600,\n  "scope":               "launch openid patient/Patient.rs",\n  "patient":             "GOLDEN-00441",\n  "encounter":           "enc-441-br01",\n  "need_patient_banner": true,\n  "id_token":            "eyJhbGciOiJSUzI1NiI..."\n}\n\n# patient + encounter are TOP-LEVEL JSON fields\n# NOT inside JWT -- SMART v2.2 spec 7.1',
+ detail:'Stage: SMART TOKEN\nPKCE: code_verifier verified\npatient: GOLDEN-00441 (top-level)\nencounter: enc-441-br01 (top-level)\nSpec: SMART v2.2 7.1\nid_token: fhirUser claim included',
+ audit:{type:'Token issued',resource:'Dr. Perera -> chain-portal',outcome:'0',color:'#1B4F8A'}},
+
+{n:11,layer:'smart',label:'IPS $summary — cross-branch patient record',
+ nodes:['node-clin','node-hapi','node-shr'],conns:['ae8','ae11'],badge:'IPS $summary',isCentrepiece:false,
+ http:'GET /fhir/Patient/GOLDEN-00441/$summary HTTP/1.1\nHost: jam-shr:8084\nAuthorization: Bearer eyJhbGci...\n# SmartScopeInterceptor: patient/Patient.rs\n# ConsentEnforcementInterceptor: TREAT\n\nHTTP/1.1 200 OK  (IPS from 3 branches)\n{\n  "entry": [\n    {"Composition": {"title":"IPS"}},\n    {"MedicationStatement": {"Amoxicillin BR01"}},\n    {"MedicationStatement": {"Metformin BR03"}},\n    {"AllergyIntolerance": {"Penicillin BR07"}},\n    {"Condition": {"Diabetes mellitus"}},\n    {"Observation": {"HbA1c 7.2%"}}\n  ]\n}',
+ detail:'Service: JamSHR :8084\nStandard: IHE IPS\nBranches merged: 3\nSections:\n  Medications (2 branches)\n  Allergies + Conditions\n  Observations + Immunizations',
+ audit:{type:'IPS $summary read',resource:'Patient/GOLDEN-00441',outcome:'0',color:'#0D7A6E'}},
+
+{n:12,layer:'audit',label:'ATNA audit — authentication recorded',
+ nodes:['node-hapi','node-audit'],conns:['ae17'],badge:'AuditEvent: auth',isCentrepiece:false,
+ http:'# AuditService.logAuthentication() -- @EventListener async\n{\n  "resourceType": "AuditEvent",\n  "type": {"code":"110114","display":"User Authentication"},\n  "action": "E",\n  "outcome": "0",\n  "agent": [{\n    "who": {"reference":"Practitioner/pr-perera-001"},\n    "requestor": true,\n    "name": "Dr. Sunil Perera"\n  }]\n}\n# IHE ATNA ITI-20  HIPAA 164.312  GDPR Art.30',
+ detail:'Stage: AUDIT (async)\nStandard: IHE ATNA ITI-20\nTransport: RFC 5425 TLS\nEvent: User Authentication\nAgent: Dr. Perera\n@Async: non-blocking',
+ audit:{type:'Authentication',resource:'Dr. Perera -> System',outcome:'0',color:'#1B4F8A'}},
+
+{n:13,layer:'lab',label:'Lab order — CBC ServiceRequest (LOINC 58410-2)',
+ nodes:['node-clin','node-hapi'],conns:['ae8'],badge:'POST ServiceRequest',isCentrepiece:false,
+ http:'POST /fhir/ServiceRequest HTTP/1.1\nHost: hapi-fhir:8080\nAuthorization: Bearer eyJhbGci...\n{\n  "resourceType": "ServiceRequest",\n  "status": "active",\n  "intent": "order",\n  "code": {"coding":[{"system":"http://loinc.org",\n    "code":"58410-2","display":"CBC panel"}]},\n  "subject": {"reference":"Patient/GOLDEN-00441"}\n}\nHTTP/1.1 201 Created\nLocation: /fhir/ServiceRequest/sr-lab-001',
+ detail:'Stage: LAB ORDER\nLOINC: 58410-2 (CBC)\nRequester: Dr. Perera BR01\nPatient: GOLDEN-00441\nSmartScope: patient/ServiceRequest.c\nConsent: TREAT purpose',
+ audit:null},
+
+{n:14,layer:'lab',label:'Lab LIS — ORU^R01 results, LDL elevated',
+ nodes:['node-lab','node-jb','node-hapi'],conns:['ae9','ae8'],badge:'3x Observation + DiagReport',
+ isCentrepiece:true,centreLabel:'🧪 Lab results chain',
+ http:'# ORU^R01 via MLLP :2576 -> JamBridge -> FHIR R4\nOBX|1|NM|718-7^Hemoglobin^LN||13.2|g/dL||N|||F\nOBX|2|NM|6690-2^WBC^LN||7.4|10*3/uL||N|||F\nOBX|3|NM|2089-1^LDL Cholesterol^LN||4.1|mmol/L||H|||F\n# OBX-8 = H (High) -> CriticalValueMediator fires\n\nPOST /fhir/Observation (x3) -> 201 Created each\nPOST /fhir/DiagnosticReport\n-> 201 Created  conclusion: "LDL elevated 4.1 mmol/L"',
+ detail:'Stage: LAB RESULTS\nHb: 13.2 g/dL Normal\nWBC: 7.4x10^3 Normal\nLDL: 4.1 mmol/L HIGH\nOBX-8: H -> critical value\nDiagnosticReport: linked',
+ audit:{type:'Lab results written',resource:'3x Observation + DiagnosticReport',outcome:'0',color:'#854D0E'}},
+
+{n:15,layer:'lab',label:'JamConnect — critical value alert + CDS Hooks',
+ nodes:['node-jconn'],conns:['ae14'],badge:'CDS card: statin therapy',isCentrepiece:false,
+ http:'# CriticalValueMediator: OBX-8 = H\n# -> JamConnect :8091 CRITICAL_VALUE event\n\nPOST /jamconnect/events\n{"eventType":"CRITICAL_VALUE","loincCode":"2089-1",\n "value":"4.1 mmol/L","interpretation":"H"}\n\n# JamConnect Rule 1: alert physician DR-001\nPOST https://alerts.br01.chain:webhook -> 200 OK\n\n# JamConnect Rule 2: CDS Hooks dispatch\nPOST https://cds-hooks.chain.internal/cds-services/lipid-risk\n-> Card: "Consider statin therapy for LDL 4.1 mmol/L"\n\n# JamConnect Rule 3: IPS cache invalidation\nPOST /fhir/Patient/GOLDEN-00441/$invalidate-ips -> 200 OK',
+ detail:'JamConnect rules: 3 fired\n  Alert: DR-001 notified\n  CDS Hooks: statin card\n  IPS: cache invalidated\nEscalation: 30min TTL\nService: JamConnect :8091',
+ audit:{type:'Critical value + CDS Hooks',resource:'Observation/obs-ldl-001',outcome:'0',color:'#854D0E'}},
+
+{n:16,layer:'pacs',label:'Imaging order — chest X-ray + JamTS validate',
+ nodes:['node-clin','node-hapi','node-ts'],conns:['ae8','ae13'],badge:'Imaging order',isCentrepiece:false,
+ http:'POST /fhir/ServiceRequest HTTP/1.1\n{\n  "category":[{"coding":[{"code":"363679005","display":"Imaging"}]}],\n  "code":{"coding":[{"system":"http://loinc.org",\n    "code":"24748-4","display":"Chest AP"}]},\n  "subject":{"reference":"Patient/GOLDEN-00441"}\n}\nHTTP/1.1 201 Created  ServiceRequest/sr-img-001\n\n# JamTS :8085 validates LOINC code\nGET /fhir/CodeSystem/$validate-code\n  ?system=http://loinc.org&code=24748-4\n-> "valid":true, "display":"Chest AP X-ray"',
+ detail:'Stage: IMAGING ORDER\nJamTS: LOINC 24748-4 validated\nReason: Dyspnoea (SNOMED)\nPatient: GOLDEN-00441\nSmartScope: patient/ServiceRequest.c',
+ audit:null},
+
+{n:17,layer:'pacs',label:'PACS — ImagingStudy created + radiologist report',
+ nodes:['node-pacs','node-hapi'],conns:['ae12'],badge:'ImagingStudy 201',
+ isCentrepiece:true,centreLabel:'📷 DICOM · ImagingStudy',
+ http:'POST /fhir/ImagingStudy HTTP/1.1\n{\n  "status": "available",\n  "modality": [{"code":"DX"}],\n  "subject": {"reference":"Patient/GOLDEN-00441"},\n  "endpoint": [{"address":\n    "https://pacs.chain.internal/wado-rs/studies/1.2.840..."}]\n}\nHTTP/1.1 201 Created  ImagingStudy/study-cxr-001\n\n# Radiologist DiagnosticReport:\n# "No acute cardiopulmonary process"\n# SNOMED 168573006\n\n# FHIR wraps DICOM metadata\n# Pixel data stays in PACS -- accessed via WADO-RS directly',
+ detail:'Modality: DX (digital X-ray)\nInstances: 2\nWADO-RS: endpoint linked\nFHIR wraps DICOM metadata\nReport: No acute process\nPixel data: stays in PACS',
+ audit:{type:'ImagingStudy created',resource:'ImagingStudy/study-cxr-001',outcome:'0',color:'#534AB7'}},
+
+{n:18,layer:'pharma',label:'Prescription — RDE^O11 Warfarin MLLP :2580',
+ nodes:['node-his','node-jb'],conns:['ae1','ae4'],badge:'RDE^O11 received',isCentrepiece:false,
+ http:'# RDE^O11 via MLLP :2580 -> JamBridge\nRXE|||WARFARIN^Warfarin 5mg|5|mg|TAB|||10|||30d\n\n# TRANSFORM: RXE -> FHIR R4 MedicationRequest\n# JamTS :8085 $translate: WARFARIN -> RxNorm\nGET /fhir/ConceptMap/$translate\n  ?system=urn:br01.local&code=WARFARIN&target=rxnorm\n-> RxNorm 855288 "Warfarin 5 MG Oral Tablet"\n\n# JamGuard fires BEFORE PERSIST\n# (see next step)',
+ detail:'Stage: RECEIVE\nPort: :2580 (RDE route)\nDrug: Warfarin 5mg\nJamTS: LOCAL->RxNorm 855288\nJamGuard: fires next\nPrescriber: DR-001 Perera',
+ audit:null},
+
+{n:19,layer:'safety',label:'JamGuard — cross-branch DDI: Warfarin x Aspirin',
+ nodes:['node-guard','node-jb'],conns:['ae7'],badge:'JamGuard DDI MAJOR',
+ isCentrepiece:true,centreLabel:'⚠ Cross-branch DDI safety',
+ http:'# JamGuard :8094 DrugDrugInteractionRule\n# Fetches ALL active MedRequests for GOLDEN-00441\n\nActive medications across 3 branches:\n  [BR01] Amoxicillin 500mg   rx-br01-001\n  [BR03] Warfarin 5mg        <- NEW\n  [BR07] Aspirin 100mg       rx-br07-009\n\n# NLM RxNorm API:\nGET rxnav.nlm.nih.gov/REST/interaction/list?rxcuis=855288+1191\n-> Warfarin x Aspirin: MAJOR -- increased bleeding risk\n\n# JamGuard alert:\n{\n  "ruleCode":  "DRUG_DRUG_INTERACTION",\n  "severity":  "MAJOR",\n  "drug1": "Warfarin", "branch1": "BR03",\n  "drug2": "Aspirin",  "branch2": "BR07",\n  "action": "REVIEW_REQUIRED"\n}',
+ detail:'Service: JamGuard :8094\nRule: DRUG_DRUG_INTERACTION\nSeverity: MAJOR\nBranches checked: 3 (cross-branch)\nDrug 1: Warfarin (BR03)\nDrug 2: Aspirin (BR07)\nAction: REVIEW_REQUIRED',
+ audit:{type:'JamGuard DDI MAJOR',resource:'Patient/GOLDEN-00441',outcome:'0',color:'#534AB7'}},
+
+{n:20,layer:'pharma',label:'MedicationRequest written + consent verified',
+ nodes:['node-pharma','node-hapi','node-consent'],conns:['ae15','ae10'],badge:'MedicationRequest 201',isCentrepiece:false,
+ http:'POST /fhir/MedicationRequest HTTP/1.1\n{\n  "status": "active",\n  "intent": "order",\n  "medicationCodeableConcept":{"coding":[\n    {"system":"rxnorm","code":"855288",\n     "display":"Warfarin 5 MG Oral Tablet"}]},\n  "subject": {"reference":"Patient/GOLDEN-00441"},\n  "note":[{"text":"JamGuard DDI alert -- pharmacist review required"}]\n}\nHTTP/1.1 201 Created\nLocation: /fhir/MedicationRequest/rx-br03-001\n\n# ConsentEnforcementInterceptor: TREAT purpose\n# Cross-branch medication read: PERMITTED',
+ detail:'MedicationRequest: created\nRxNorm: 855288 (Warfarin 5mg)\nPatient: GOLDEN-00441\nDDI note: appended\nConsent interceptor: TREAT\nPharmacist: alerted',
+ audit:{type:'MedicationRequest write',resource:'MedicationRequest/rx-br03-001',outcome:'0',color:'#0D7A6E'}},
+
+{n:21,layer:'consent',label:'Consent denied — external pharmacy blocked',
+ nodes:['node-hapi','node-consent'],conns:['ae10'],badge:'403 Consent DENIED',
+ isCentrepiece:true,centreLabel:'🔐 FHIR Consent',
+ http:'# Patient withdraws consent for external pharmacy\nGET /fhir/Consent?patient=GOLDEN-00441&actor=org-ext-pharmacy\n\n{\n  "provision": {\n    "type": "deny",\n    "class": [{"code":"MedicationRequest"}]\n  }\n}\n# ConsentEnforcementInterceptor: DENY\n\nHTTP/1.1 403 Forbidden\n{\n  "resourceType": "OperationOutcome",\n  "issue": [{"severity":"error","code":"forbidden",\n    "diagnostics":"Consent denied for MedicationRequest"}]\n}\n# AuditEvent written: outcome=8',
+ detail:'ConsentEnforcementInterceptor\nActor: external pharmacy\nClass: MedicationRequest\nResult: DENIED\nHTTP: 403 Forbidden\nAuditEvent: outcome=8 (serious failure)',
+ audit:{type:'Consent DENIED',resource:'MedicationRequest (blocked)',outcome:'8',color:'#B91C1C'}},
+
+{n:22,layer:'referral',label:'JamReferral — cross-branch referral BR01 -> BR05',
+ nodes:['node-ref','node-hapi'],conns:['ae16'],badge:'ServiceRequest + Task',isCentrepiece:false,
+ http:'POST /fhir/ServiceRequest HTTP/1.1\n{\n  "intent": "referral",\n  "code":{"coding":[{"code":"306206005",\n    "display":"Referral to cardiology"}]},\n  "requester":{"reference":"Organization/org-br01-001"},\n  "performer":[{"reference":"Organization/org-br05-cardio"}]\n}\nHTTP/1.1 201 Created  ServiceRequest/sr-ref-001\n\n# JamReferral :8093 creates workflow Task:\nPOST /fhir/Task\n{"focus":"ServiceRequest/sr-ref-001",\n "owner":"org-br05-cardio","status":"requested"}\nHTTP/1.1 201 Created  Task/task-ref-001\n# 48h accept window -- auto-escalate on timeout',
+ detail:'Service: JamReferral :8093\nState: DRAFT -> SENT\nTimeout: 48h accept window\nFrom: BR01 General\nTo: BR05 Cardiology\nPatient: GOLDEN-00441\nTask: workflow tracking',
+ audit:null},
+
+{n:23,layer:'referral',label:'BR05 accepts referral — appointment booked',
+ nodes:['node-ref'],conns:[],badge:'Task: accepted',isCentrepiece:false,
+ http:'# BR05 Cardiology accepts\nPATCH /fhir/Task/task-ref-001\n[{"op":"replace","path":"/status","value":"accepted"}]\nHTTP/1.1 200 OK\n{"status":"accepted",\n "note":[{"text":"Cardiology appt: 2026-06-19 09:00"}]}\n\n# JamReferral notifications:\n# -> JamConnect event -> BR01 notified\n# -> SmsAdaptor -> CHW SMS sent\n# State: SENT -> ACCEPTED -> COMPLETED\n\n# On completion:\n{"output":[{"valueReference":\n  {"reference":"DiagnosticReport/dr-cardiology-001"}}]}',
+ detail:'State: SENT -> ACCEPTED\nBR05 Cardiology accepts\nAppointment: 2026-06-19\nNotification: BR01 alerted\nCHW: SMS sent\nFinal state: COMPLETED',
+ audit:{type:'Referral ACCEPTED',resource:'Task/task-ref-001',outcome:'0',color:'#0D7A6E'}},
+
+{n:24,layer:'safety',label:'JamGuard — missed follow-up detection',
+ nodes:['node-guard'],conns:[],badge:'JamGuard MISSED_FOLLOWUP',isCentrepiece:false,
+ http:'# JamGuard MissedFollowupRule (hourly scan)\n# LDL = 4.1 mmol/L (HIGH) at step 14\n# 72 hours elapsed -- no follow-up Encounter\n\n# Alert:\n{\n  "ruleCode":    "MISSED_FOLLOWUP",\n  "patient":     "GOLDEN-00441",\n  "loincCode":   "2089-1",\n  "value":       "4.1 mmol/L HIGH",\n  "windowHours": 72,\n  "status":      "NO_FOLLOWUP_ENCOUNTER"\n}\n\n# JamGuard also checks:\n# POLYPHARMACY (>10 active MedRequests, age >65)\n# DISCHARGE_FOLLOWUP (high-risk discharge no Appointment)\n# DUPLICATE_RX (same ATC class two branches within 30d)',
+ detail:'Service: JamGuard :8094\nRule: MISSED_FOLLOWUP\nTrigger: critical OBX-8 H\nWindow: 72 hours\nResult: no Encounter found\nOther rules: POLYPHARMACY\n  DISCHARGE_FOLLOWUP\n  DUPLICATE_RX',
+ audit:{type:'JamGuard: missed follow-up',resource:'Patient/GOLDEN-00441',outcome:'0',color:'#534AB7'}},
+
+{n:25,layer:'audit',label:'ATNA — complete audit trail (8 events)',
+ nodes:['node-hapi','node-audit'],conns:['ae17'],badge:'8 AuditEvents',
+ isCentrepiece:true,centreLabel:'📊 Full ATNA audit trail',
+ http:'# IHE ATNA Audit Trail -- GOLDEN-00441 encounter\n# [1] Authentication    Dr. Perera -> System       step 12\n# [2] Consent PERMITTED org-br01 -> chain-consent   step 5\n# [3] Patient write     Patient/MRN123456 v3        step 6\n# [4] IPS $summary      Patient/GOLDEN-00441        step 11\n# [5] Lab results       3x Observation              step 14\n# [6] ImagingStudy      ImagingStudy/study-cxr-001  step 17\n# [7] MedRequest write  Warfarin rx-br03-001        step 20\n# [8] Consent DENIED    ext-pharmacy BLOCKED        step 21\n\n# GDPR Art.30  HIPAA 164.312  IHE ATNA ITI-20\n# BALP FHIR AuditEvent for each event',
+ detail:'ATNA events: 8 written\nStandards:\n  GDPR Article 30\n  HIPAA 164.312\n  IHE ATNA ITI-20\n  BALP FHIR AuditEvent\nNotable: 1 consent denial',
+ audit:{type:'Full audit trail (8 events)',resource:'AuditStore',outcome:'0',color:'#854D0E'}},
+
+{n:26,label:'Simulation complete — full Jam platform',layer:'audit',
+ nodes:['node-jb'],conns:[],badge:'Complete',isCentrepiece:false,
+ http:'=== Hospital Chain HIE -- Jam Platform Summary ===\n\nAll Jam platform components demonstrated:\n  JamBridge    :8443  HL7v2->FHIR 7-stage pipeline\n  JamMPI       :8081  Patient identity golden records\n  AJ Consent   :8082  Consent enforcement GDPR/HIPAA\n  JamConnect   :8091  Clinical intelligence CDS Hooks\n  JamGuard     :8094  DDI allergy missed-follow-up\n  JamSHR       :8084  Shared health record IPS\n  JamTS        :8085  Terminology LOINC/SNOMED\n  JamReferral  :8093  Cross-branch referrals Task SM\n  HAPI FHIR    :8080  FHIR R4 JPA repository\n  Auth Server  :9000  SMART v2.2 PKCE S256 SSO\n\nBranches unified: 3 (GOLDEN-00441)\nIHE profiles: ITI-20 ITI-78 ITI-83 SMART v2.2\n              IPS BALP MHD mCSD\nAudit events: 8 ATNA records',
+ detail:'Steps: 26\nBranches unified: 3\nStandards: 10 IHE profiles\nAudit: 8 ATNA events\nSafety: 4 JamGuard rules\nPipeline: 7 stages',
+ audit:null},
+];
+
+
+/* ── State ── */
+var cur = -1;
+var autoPlay = false;
+var autoTimer = null;
+var twCancel = null;
+var auditHistory = [];
+
+/* ── Build step dots ── */
+function buildDots() {
+  D.dots.innerHTML = '';
+  var last = null;
+  STEPS.forEach(function(s, i) {
+    if (s.layer !== last && last !== null) {
+      var sep = document.createElement('div');
+      sep.style.cssText = 'width:1px;height:14px;background:rgba(184,212,232,.2);flex-shrink:0;margin:0 2px;';
+      D.dots.appendChild(sep);
+    }
+    last = s.layer;
+    var d = document.createElement('button');
+    d.className = 'step-dot'; d.id = 'dot-'+i;
+    d.title = 'Step '+(i+1)+': '+s.label;
+    (function(idx){ d.addEventListener('click', function(){ stopPlay(); goTo(idx); }); })(i);
+    D.dots.appendChild(d);
+  });
+}
+
+function refreshDots() {
+  STEPS.forEach(function(s, i) {
+    var d = document.getElementById('dot-'+i); if (!d) return;
+    var c = LAYERS[s.layer].color;
+    d.classList.remove('active','done');
+    if (i === cur) {
+      d.classList.add('active'); d.style.background=c; d.style.borderColor=c;
+      d.style.boxShadow='0 0 6px '+c+'80';
+    } else if (i < cur) {
+      d.classList.add('done'); d.style.background=c+'60';
+      d.style.borderColor=c+'80'; d.style.boxShadow='';
+    } else {
+      d.style.background=''; d.style.borderColor=''; d.style.boxShadow='';
+    }
+  });
+}
+
+/* ── Node/edge state ── */
+var ALL_N = ['node-his','node-clin','node-auth','node-mpi','node-jb','node-guard',
+             'node-lab','node-hapi','node-consent','node-shr','node-pacs','node-ts',
+             'node-jconn','node-pharma','node-ref','node-audit'];
+var ALL_E = ['ae1','ae2','ae3','ae4','ae5','ae6','ae7','ae8','ae9','ae10',
+             'ae11','ae12','ae13','ae14','ae15','ae16','ae17','ae18','ae19'];
+var TEAL_N  = {'node-hapi':1,'node-mpi':1,'node-shr':1,'node-jconn':1,'node-ref':1,'node-consent':1};
+var PURP_N  = {'node-guard':1,'node-pacs':1,'node-ts':1,'node-pharma':1};
+var LAB_N   = {'node-lab':1};
+var TEAL_E  = {ae6:1,ae8:1,ae10:1,ae11:1,ae13:1,ae14:1,ae16:1,ae17:1};
+var AMBER_E = {ae9:1};
+var PURP_E  = {ae7:1,ae12:1,ae15:1,ae18:1};
+
+function applyStates(step) {
+  var done = {};
+  for (var i=0; i<cur; i++) STEPS[i].nodes.forEach(function(n){ done[n]=1; });
+  ALL_N.forEach(function(id) {
+    var el = document.getElementById(id); if (!el) return;
+    el.classList.remove('active','teal','lab','pacs','done');
+    if (step.nodes.indexOf(id) >= 0) {
+      if (TEAL_N[id]) el.classList.add('teal');
+      else if (PURP_N[id]) el.classList.add('pacs');
+      else if (LAB_N[id])  el.classList.add('lab');
+      else el.classList.add('active');
+    } else if (done[id]) {
+      el.classList.add('done');
+    }
+  });
+  ALL_E.forEach(function(id) {
+    var el = document.getElementById(id); if (!el) return;
+    el.classList.remove('active','teal','amber','purple');
+    el.style.opacity = '0';
+    if (step.conns.indexOf(id) >= 0) {
+      el.style.opacity = '1';
+      if      (PURP_E[id])  { el.classList.add('purple'); el.setAttribute('marker-end','url(#arr-purple)'); }
+      else if (AMBER_E[id]) { el.classList.add('amber');  el.setAttribute('marker-end','url(#arr-amber)'); }
+      else if (TEAL_E[id])  { el.classList.add('teal');   el.setAttribute('marker-end','url(#arr-teal)'); }
+      else                  { el.classList.add('active'); el.setAttribute('marker-end','url(#arr-navy)'); }
+    } else {
+      el.setAttribute('marker-end','url(#arr-dim)');
+    }
+  });
+}
+
+/* ── Syntax highlight ── */
+function hl(raw) {
+  return raw.split('\n').map(function(line) {
+    function esc(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+    if (/^\s*#/.test(line)) return '<span class="http-comment">'+esc(line)+'</span>';
+    if (/^HTTP\//.test(line)) {
+      var m=line.match(/^(HTTP\/[\d.]+)\s+(\d+)\s*(.*)$/);
+      if(m){var c=m[2][0]==='2'?'http-status-ok':'http-status-err';return '<span class="http-header">HTTP/'+m[1].slice(5)+'</span> <span class="'+c+'">'+esc(m[2])+' '+esc(m[3])+'</span>';}
+    }
+    if (/^(GET|POST|PUT|DELETE|PATCH) /.test(line)){
+      var p=line.split(' ');
+      return '<span class="http-method">'+esc(p[0])+'</span> <span class="http-url">'+esc(p[1])+'</span>'+(p[2]?' <span class="http-header">'+esc(p[2])+'</span>':'');
+    }
+    if (/^[A-Za-z][\w-]+: /.test(line)){
+      var c2=line.indexOf(':'),k=line.slice(0,c2),v=line.slice(c2+1);
+      return '<span class="http-header">'+esc(k)+'</span>:<span class="http-muted">'+esc(v)+'</span>';
+    }
+    if (/^\s+"[\w_]+"/.test(line)){
+      return line.replace(/("[\w_]+")\s*:\s*(".*?"|true|false|null|\d[\d.]*)/g,function(_,k,v){
+        var vc=v[0]==='"'?'http-str':(v==='true'||v==='false')?'http-bool':'http-num';
+        var d=esc(v);if(v.startsWith('"eyJ')&&v.length>24)d='"'+esc(v.slice(1,16))+'&hellip;"';
+        return '<span class="http-key">'+esc(k)+'</span>: <span class="'+vc+'">'+d+'</span>';
+      });
+    }
+    if (/^(SELECT|INSERT|UPDATE|RETURNING|SQL:)/.test(line.trimStart())) return '<span class="http-ann">'+esc(line)+'</span>';
+    if (line.indexOf('->') >= 0 || line.indexOf('=>') >= 0) return '<span class="http-arrow">'+esc(line)+'</span>';
+    if (/^\s*\[/.test(line)) return '<span class="http-num">'+esc(line)+'</span>';
+    if (line.trim()==='') return '';
+    return '<span class="http-muted">'+esc(line)+'</span>';
+  }).join('\n');
+}
+
+/* ── Typewriter ── */
+function typewrite(el, htmlStr, delay, onDone) {
+  if (twCancel) { twCancel(); twCancel=null; }
+  el.innerHTML = '';
+  var pre = document.createElement('pre');
+  pre.style.cssText='margin:0;padding:0;white-space:pre-wrap;word-break:break-word;';
+  el.appendChild(pre);
+  var q=[], i=0, j=0, cancelled=false;
+  twCancel = function(){ cancelled=true; };
+  // build queue
+  while (j < htmlStr.length) {
+    if (htmlStr[j]==='<') { var e=htmlStr.indexOf('>',j);if(e<0){q.push(htmlStr[j++]);continue;}q.push(htmlStr.slice(j,e+1));j=e+1; }
+    else if (htmlStr[j]==='&') { var e2=htmlStr.indexOf(';',j);if(e2<0){q.push(htmlStr[j++]);continue;}q.push(htmlStr.slice(j,e2+1));j=e2+1; }
+    else q.push(htmlStr[j++]);
+  }
+  function tick() {
+    if (cancelled) return;
+    if (i >= q.length) { twCancel=null; if(onDone)onDone(); return; }
+    pre.innerHTML += q[i++];
+    el.scrollTop = el.scrollHeight;
+    requestAnimationFrame(function(){ setTimeout(tick, delay); });
+  }
+  tick();
+}
+
+/* ── Packet animation ── */
+var SVG = document.getElementById('flow-svg');
+var pool = [];
+function getP() {
+  var p=pool.find(function(x){return !x._busy;});
+  if(!p){p=document.createElementNS('http://www.w3.org/2000/svg','circle');p.setAttribute('r','5');p.style.pointerEvents='none';SVG.appendChild(p);pool.push(p);}
+  p._busy=true; return p;
+}
+function releaseP(p){ p._busy=false; p.setAttribute('opacity','0'); }
+var ECOL={ae1:'#1B4F8A',ae2:'#1B4F8A',ae3:'#1B4F8A',ae4:'#1B4F8A',ae5:'#1B4F8A',
+  ae6:'#0D7A6E',ae7:'#534AB7',ae8:'#0D7A6E',ae9:'#854D0E',ae10:'#854D0E',
+  ae11:'#0D7A6E',ae12:'#534AB7',ae13:'#534AB7',ae14:'#0D7A6E',ae15:'#534AB7',
+  ae16:'#0D7A6E',ae17:'#0D7A6E',ae18:'#534AB7',ae19:'#1B4F8A'};
+function fly(cid, spd) {
+  var el=document.getElementById(cid); if(!el) return;
+  var len; try{len=el.getTotalLength();}catch(e){return;}
+  var p=getP(),color=ECOL[cid]||'#1B4F8A';
+  p.setAttribute('fill',color);p.setAttribute('opacity','1');
+  p.style.filter='drop-shadow(0 0 5px '+color+'99)';
+  var dur=Math.round(600/spd),t0=performance.now();
+  (function frame(now){
+    var t=Math.min((now-t0)/dur,1),e=t<.5?4*t*t*t:1-Math.pow(-2*t+2,3)/2;
+    try{var pt=el.getPointAtLength(e*len);p.setAttribute('cx',pt.x);p.setAttribute('cy',pt.y);}catch(x){}
+    t<1?requestAnimationFrame(frame):releaseP(p);
+  })(t0);
+}
+
+/* ── Audit render ── */
+function renderAudit() {
+  if (!auditHistory.length) {
+    D.audit.innerHTML='<div class="idle-state"><div class="idle-icon">&#128203;</div><div>Audit events will accumulate here</div></div>';
+    D.aBadge.textContent='0 events'; D.aBadge.style.color=''; return;
+  }
+  D.aBadge.textContent=auditHistory.length+' event'+(auditHistory.length>1?'s':'');
+  D.aBadge.style.color='#F0C060';
+  var wrap=document.createElement('div'); wrap.style.cssText='padding:.75rem;display:flex;flex-direction:column;gap:.5rem;';
+  auditHistory.forEach(function(ev){
+    var ts=new Date(1753916400000+ev.step*35000).toISOString().slice(11,23);
+    var card=document.createElement('div');
+    card.style.cssText='border-radius:7px;border:1px solid '+ev.color+'50;background:'+ev.color+'12;padding:.5rem .75rem;font-size:11px;font-family:var(--font-mono);';
+    card.innerHTML='<div style="display:flex;justify-content:space-between;margin-bottom:2px;"><span style="color:'+ev.color+';font-weight:700;font-family:var(--font-sans);">'+ev.type+'</span><span style="color:#2C5070;font-size:10px;">'+ts+'Z</span></div><div><span style="color:#3D6A8A;">entity: </span><span style="color:#0A5A50;">&ldquo;'+ev.resource+'&rdquo;</span></div><div><span style="color:#3D6A8A;">outcome: </span><span style="color:'+(ev.outcome==='0'?'#116329':'#B91C1C')+';font-weight:700;">'+(ev.outcome==='0'?'0 (success)':'8 (serious failure)')+'</span></div>';
+    wrap.appendChild(card);
+  });
+  D.audit.innerHTML=''; D.audit.appendChild(wrap);
+  D.audit.scrollTop=D.audit.scrollHeight;
+}
+
+/* ── Core render ── */
+function renderStep(n) {
+  if (n<0||n>=STEPS.length) return;
+  cur = n;
+  var s = STEPS[n];
+  var layer = LAYERS[s.layer];
+
+  applyStates(s);
+  refreshDots();
+
+  D.counter.textContent = s.n+' / '+STEPS.length;
+  D.label.innerHTML = '<span style="color:'+layer.color+';font-weight:700;font-size:11px;background:rgba(0,0,0,.04);padding:1px 7px;border-radius:4px;margin-right:.5rem;border:1px solid '+layer.color+'40;">'+layer.label+'</span>'+s.label;
+  D.flow.textContent = 'Step '+s.n+' — '+s.label;
+
+  // centrepiece
+  var info = document.getElementById('step-info');
+  if (s.isCentrepiece) {
+    info.textContent = s.centreLabel;
+    info.style.display='block'; info.style.color=layer.color;
+    info.style.borderColor=layer.color+'50'; info.style.background=layer.bg;
+  } else { info.style.display='none'; }
+
+  // packets
+  var spd = parseFloat(D.speed.value)||1;
+  s.conns.forEach(function(cid,i){ setTimeout(function(){ fly(cid,spd); }, i*120); });
+
+  // HTTP typewriter
+  D.hBadge.textContent = s.badge||'—';
+  D.http.innerHTML = '';
+  var badge = document.createElement('div');
+  badge.style.cssText='position:sticky;top:0;float:right;font-size:10px;font-weight:700;padding:2px 8px;border-radius:0 0 0 6px;background:'+layer.bg+';color:'+layer.color+';border-bottom:1px solid '+layer.color+'40;border-left:1px solid '+layer.color+'40;letter-spacing:.05em;';
+  badge.textContent = layer.label;
+  D.http.appendChild(badge);
+  var sd = document.createElement('div'); sd.style.padding='.875rem 1rem';
+  D.http.appendChild(sd);
+  typewrite(sd, hl(s.http), Math.round(14/spd), function(){
+    if (autoPlay) schedNext();
+  });
+
+  // Stage detail
+  D.tBadge.textContent = layer.label;
+  D.token.innerHTML='<div style="padding:.875rem 1rem;font-family:var(--font-mono);font-size:11px;line-height:1.7;"><div style="color:'+layer.color+';font-weight:700;font-size:10px;text-transform:uppercase;letter-spacing:.07em;margin-bottom:.75rem;">'+layer.label+'</div><pre style="margin:0;white-space:pre-wrap;color:#2C5070;">'+s.detail+'</pre></div>';
+
+  // Audit
+  if (s.audit) { auditHistory.push(Object.assign({step:n},s.audit)); renderAudit(); }
+
+  D.play.textContent = autoPlay ? '⏸' : '▶';
+  D.prev.style.opacity = n===0?'0.35':'1';
+  D.next.style.opacity = n===STEPS.length-1?'0.35':'1';
+}
+
+/* ── Navigation ── */
+function goTo(n){ if(n<0)n=0;if(n>=STEPS.length)n=STEPS.length-1;renderStep(n); }
+
+function restart() {
+  stopPlay();
+  ALL_N.forEach(function(id){var el=document.getElementById(id);if(el)el.classList.remove('active','teal','lab','pacs','done');});
+  ALL_E.forEach(function(id){var el=document.getElementById(id);if(el){el.classList.remove('active','teal','amber','purple');el.style.opacity='0';el.setAttribute('marker-end','url(#arr-dim)');}});
+  cur=-1; auditHistory=[]; refreshDots(); renderAudit();
+  D.counter.textContent='0 / '+STEPS.length;
+  D.label.textContent='Select a step or press play';
+  D.flow.textContent='Waiting to start';
+  D.hBadge.textContent=D.tBadge.textContent='—';
+  D.aBadge.textContent='0 events'; D.aBadge.style.color='';
+  D.http.innerHTML='<div class="idle-state"><div class="idle-icon">&#x21C4;</div><div>HTTP packets will appear here</div><div style="color:#3D6A8A;font-size:11px;">Press &#x25B6; to start the simulation</div></div>';
+  D.token.innerHTML='<div class="idle-state"><div class="idle-icon">&#x2699;</div><div>Stage detail will appear here</div></div>';
+  D.audit.innerHTML='<div class="idle-state"><div class="idle-icon">&#128203;</div><div>Audit events will accumulate here</div></div>';
+  D.play.textContent='▶';
+  document.getElementById('step-info').style.display='none';
+}
+
+function stopPlay() {
+  autoPlay=false;
+  if(autoTimer){clearTimeout(autoTimer);autoTimer=null;}
+  D.play.textContent='▶';
+}
+
+function schedNext() {
+  if(!autoPlay) return;
+  var spd=parseFloat(D.speed.value)||1;
+  autoTimer=setTimeout(function(){
+    if(!autoPlay) return;
+    var nxt=cur+1;
+    if(nxt>=STEPS.length){stopPlay();return;}
+    renderStep(nxt);
+    history.replaceState(null,'','#step-'+(nxt+1));
+  }, Math.round(800/spd));
+}
+
+function togglePlay() {
+  if (autoPlay) {
+    stopPlay();
+  } else {
+    autoPlay=true; D.play.textContent='⏸';
+    if (cur<0) { renderStep(0); history.replaceState(null,'','#step-1'); }
+    else if (cur>=STEPS.length-1) { restart(); setTimeout(function(){ autoPlay=true; D.play.textContent='⏸'; renderStep(0); },100); }
+    else { schedNext(); }
+  }
+}
+
+/* ── Wire buttons ── */
+D.play.onclick    = togglePlay;
+D.next.onclick    = function(){ stopPlay(); goTo(cur+1); };
+D.prev.onclick    = function(){ stopPlay(); goTo(cur-1); };
+D.restart.onclick = restart;
+
+/* ── Keyboard ── */
+document.addEventListener('keydown', function(e){
+  if(e.code==='Space'){e.preventDefault();togglePlay();}
+  if(e.code==='ArrowRight'){stopPlay();goTo(cur+1);}
+  if(e.code==='ArrowLeft'){stopPlay();goTo(cur-1);}
+  if(e.code==='KeyR'){restart();}
+  if(e.code==='KeyF'){if(!document.fullscreenElement)document.documentElement.requestFullscreen().catch(function(){});else document.exitFullscreen();}
+});
+
+/* ── URL hash ── */
+function readHash(){var m=location.hash.match(/#step-(\d+)/);if(m){var n=parseInt(m[1],10)-1;if(n>=0&&n<STEPS.length)goTo(n);}}
+window.addEventListener('hashchange',readHash);
+
+/* ── Share button ── */
+(function(){
+  var right=document.querySelector('.tb-right'); if(!right) return;
+  var btn=document.createElement('button');
+  btn.style.cssText='font-size:11px;font-weight:600;padding:3px 10px;border-radius:6px;border:1px solid #C8D2DC;background:#E8EEF4;color:#2C5070;cursor:pointer;font-family:var(--font-sans);';
+  btn.textContent='⎘ Share step';
+  btn.addEventListener('click',function(){
+    var step=cur>=0?cur+1:1;
+    var url=location.origin+location.pathname+'#step-'+step;
+    navigator.clipboard.writeText(url).then(function(){
+      btn.textContent='✓ Copied!';btn.style.color='#0D7A6E';
+      setTimeout(function(){btn.textContent='⎘ Share step';btn.style.color='';},2000);
+    }).catch(function(){prompt('Copy:',url);});
+  });
+  right.insertBefore(btn,right.firstChild);
+})();
+
+/* ── Keyboard hints ── */
+(function(){
+  var h=document.createElement('div');
+  h.style.cssText='font-size:10px;color:#3D6A8A;white-space:nowrap;';
+  h.innerHTML='<kbd style="background:#E8EEF4;border:1px solid #C8D2DC;border-radius:3px;padding:1px 5px;color:#2C5070;">Space</kbd> play &nbsp;<kbd style="background:#E8EEF4;border:1px solid #C8D2DC;border-radius:3px;padding:1px 5px;color:#2C5070;">← →</kbd> step &nbsp;<kbd style="background:#E8EEF4;border:1px solid #C8D2DC;border-radius:3px;padding:1px 5px;color:#2C5070;">R</kbd> restart &nbsp;<kbd style="background:#E8EEF4;border:1px solid #C8D2DC;border-radius:3px;padding:1px 5px;color:#2C5070;">F</kbd> fullscreen';
+  document.getElementById('bottombar').appendChild(h);
+})();
+
+/* ── Init ── */
+buildDots(); restart(); readHash();
+console.log('JamBridge Hospital Chain HIE Simulation — play button wired, 26 steps ready');
+
+})();
+</script>
+</body>
+</html>
