@@ -1,0 +1,858 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>JamBridge &amp; the Jam ecosystem &#8212; technical deep-dive | AJ FHIR Platform</title>
+<meta name="description" content="Deep technical guide to JamBridge, the full Jam platform ecosystem, how it compares to OpenHIM, and how it operates in large hospital chain deployments."/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --navy:#1B4F8A; --navy-d:#133A6A; --navy-l:#E0EFFE;
+  --teal:#0D7A6E; --teal-d:#0A6058; --teal-l:#D8F0EC;
+  --text:#0D1F33; --sub:#2C5070; --dim:#3D6A8A; --muted:#486880;
+  --border:#B8D4E8; --border-l:#DDE3EA;
+  --bg:#F0F7FF; --white:#FFFFFF;
+  --amber:#854D0E; --amber-l:#FFF4E8;
+  --purple:#5A2D8A; --purple-l:#EDE4FF;
+  --font:-apple-system,BlinkMacSystemFont,'Inter','Segoe UI',sans-serif;
+  --mono:'SFMono-Regular',Consolas,monospace;
+}
+html{scroll-behavior:smooth}
+body{font-family:var(--font);font-size:16px;line-height:1.75;color:var(--text);background:var(--white)}
+
+/* ── Base typography ── */
+h1{font-size:clamp(2rem,4vw,2.875rem);font-weight:800;letter-spacing:-.03em;line-height:1.1;color:var(--text)}
+h2{font-size:clamp(1.5rem,2.5vw,2rem);font-weight:800;letter-spacing:-.02em;line-height:1.15;color:var(--text)}
+h3{font-size:1.25rem;font-weight:700;letter-spacing:-.01em;color:var(--text)}
+h4{font-size:1rem;font-weight:700;color:var(--text)}
+p{color:var(--sub);line-height:1.75;margin-bottom:1rem}
+p:last-child{margin-bottom:0}
+strong{color:var(--text);font-weight:600}
+code{font-family:var(--mono);font-size:.83em;background:#F0F4F8;color:#1B4F8A;
+  padding:.15em .4em;border-radius:4px;border:1px solid var(--border-l)}
+ol,ul{color:var(--sub);line-height:1.75;padding-left:1.25rem;margin-bottom:1rem}
+li{margin-bottom:.375rem}
+
+/* ── Nav ── */
+nav{position:sticky;top:0;z-index:100;background:rgba(255,255,255,.96);
+  backdrop-filter:blur(8px);border-bottom:1px solid var(--border-l);height:52px;
+  display:flex;align-items:center}
+.nav-inner{display:flex;align-items:center;gap:1.5rem;width:100%;
+  max-width:1160px;margin:0 auto;padding:0 1.5rem}
+.nav-logo{display:flex;align-items:center;gap:8px;font-weight:800;font-size:15px;
+  color:var(--text);text-decoration:none}
+.nav-mark{width:26px;height:26px;border-radius:7px;background:var(--navy);
+  display:flex;align-items:center;justify-content:center;font-size:10px;
+  font-weight:800;color:white;flex-shrink:0}
+.nav-links{display:flex;gap:1.25rem;margin-left:auto;align-items:center}
+.nav-links a{font-size:13px;font-weight:500;color:var(--dim);text-decoration:none}
+.nav-links a:hover{color:var(--navy)}
+.nav-links a.active{color:var(--navy);font-weight:600}
+.nav-cta{background:var(--navy);color:white!important;padding:.35rem .875rem;
+  border-radius:7px;font-weight:600!important}
+.nav-cta:hover{background:var(--navy-d)!important}
+
+/* ── Blog post header ── */
+.post-header{max-width:760px;margin:0 auto;padding:2.75rem 1.5rem 0}
+.breadcrumb{font-size:13px;color:var(--dim);margin-bottom:.875rem}
+.breadcrumb a{color:var(--dim);text-decoration:none}
+.breadcrumb a:hover{color:var(--navy)}
+.post-tags{display:flex;flex-wrap:wrap;gap:.4rem;margin-bottom:1.125rem}
+.post-tag{font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;
+  border:1px solid}
+.tag-navy{background:var(--navy-l);color:var(--navy);border-color:rgba(27,79,138,.2)}
+.tag-teal{background:var(--teal-l);color:var(--teal-d);border-color:rgba(13,122,110,.2)}
+.tag-gray{background:#F0F4F8;color:var(--sub);border-color:var(--border-l)}
+.post-title{margin:0 0 1rem}
+.post-desc{font-size:1.0625rem;color:var(--sub);line-height:1.8;margin-bottom:1.375rem}
+.byline{display:flex;align-items:center;gap:.875rem;padding:.875rem 0;
+  border-top:1px solid var(--border-l);border-bottom:1px solid var(--border-l);
+  margin-bottom:0;flex-wrap:wrap}
+.byline-avatar{width:36px;height:36px;border-radius:50%;background:var(--navy);
+  display:flex;align-items:center;justify-content:center;font-size:11px;
+  font-weight:800;color:white;flex-shrink:0}
+.byline-name{font-size:13px;font-weight:600;color:var(--text)}
+.byline-site{font-size:13px;color:var(--dim)}
+.byline-meta{margin-left:auto;display:flex;align-items:center;gap:.625rem}
+.byline-meta span{font-size:13px;color:var(--dim)}
+
+/* ── Page layout: TOC + Article ── */
+.page-body{max-width:1160px;margin:0 auto;padding:2.5rem 1.5rem 5rem;
+  display:grid;grid-template-columns:200px 1fr;gap:4rem;align-items:start}
+
+/* ── TOC ── */
+.toc{position:sticky;top:68px}
+.toc-heading{font-size:12px;font-weight:700;letter-spacing:.07em;
+  text-transform:uppercase;color:var(--dim);margin-bottom:.75rem}
+.toc ul{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:.125rem}
+.toc li{margin:0}
+.toc a{font-size:13.5px;color:var(--dim);text-decoration:none;padding:.3rem .625rem;
+  border-radius:5px;display:block;border-left:2px solid transparent;
+  transition:color .12s,background .12s}
+.toc a:hover{color:var(--navy);background:var(--navy-l)}
+.toc a.active{color:var(--navy);font-weight:600;border-left-color:var(--navy);background:var(--navy-l)}
+.toc-sep{height:1px;background:var(--border-l);margin:.5rem .625rem;list-style:none;padding:0}
+
+/* ── Article ── */
+.article{min-width:0;max-width:720px}
+.article h2{margin:3rem 0 1.125rem;padding-top:2.5rem;border-top:1px solid var(--border-l)}
+.article h2:first-child{border-top:none;padding-top:0;margin-top:0}
+.article h3{margin:2.25rem 0 .875rem;color:var(--navy)}
+.article h4{margin:1.5rem 0 .5rem}
+.article > p,.article > ul,.article > ol{margin-bottom:1.125rem;line-height:1.8}
+
+/* ── Feature cards ── */
+.card-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));
+  gap:1rem;margin:1rem 0 1.75rem}
+.card{background:var(--white);border:1.5px solid var(--border);border-radius:11px;
+  padding:1.125rem 1.25rem;transition:border-color .18s,box-shadow .18s,transform .18s}
+.card:hover{border-color:var(--navy);box-shadow:0 6px 24px rgba(27,79,138,.08);transform:translateY(-2px)}
+.card-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem;gap:.5rem}
+.card-name{font-size:15px;font-weight:700;color:var(--text)}
+.card-badge{font-size:11.5px;font-weight:700;padding:2px 9px;border-radius:20px;white-space:nowrap;flex-shrink:0}
+.badge-navy{background:var(--navy-l);color:var(--navy)}
+.badge-teal{background:var(--teal-l);color:var(--teal-d)}
+.badge-purple{background:var(--purple-l);color:var(--purple)}
+.badge-amber{background:var(--amber-l);color:var(--amber)}
+.card-desc{font-size:14px;color:var(--sub);line-height:1.65;margin:0}
+
+/* ── Layer label ── */
+.layer-label{font-size:12px;font-weight:700;text-transform:uppercase;
+  letter-spacing:.07em;padding:.25rem .625rem;border-left:3px solid;
+  margin:1.75rem 0 .75rem;display:inline-block}
+.layer-navy{border-color:var(--navy);color:var(--navy)}
+.layer-teal{border-color:var(--teal);color:var(--teal-d)}
+.layer-purple{border-color:var(--purple);color:var(--purple)}
+.layer-amber{border-color:var(--amber);color:var(--amber)}
+
+/* ── Pipeline steps ── */
+.pipeline{display:flex;flex-direction:column;margin:1.5rem 0 2rem}
+.pipe-step{display:flex;gap:1rem;align-items:stretch}
+.pipe-left{display:flex;flex-direction:column;align-items:center;width:36px;flex-shrink:0}
+.pipe-num{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;
+  justify-content:center;font-size:13px;font-weight:800;flex-shrink:0;border:2px solid}
+.pipe-line{flex:1;width:2px;background:var(--border-l);margin:.2rem 0}
+.pipe-step:last-child .pipe-line{display:none}
+.pipe-body{padding:.1rem 0 1.25rem;flex:1}
+.pipe-stage{display:inline-block;font-size:11px;font-weight:800;padding:1px 7px;
+  border-radius:3px;letter-spacing:.05em;margin-bottom:.375rem;font-family:var(--mono)}
+.pipe-title{font-size:15px;font-weight:700;color:var(--text);margin-bottom:.375rem}
+.pipe-desc{font-size:14px;color:var(--sub);line-height:1.7;margin:0}
+
+/* ── Callout ── */
+.callout{border-radius:9px;padding:1rem 1.125rem;margin:1.5rem 0;
+  display:flex;gap:.75rem;align-items:flex-start}
+.callout-icon{font-size:18px;flex-shrink:0;line-height:1.5}
+.callout-body{flex:1}
+.callout-title{font-size:14px;font-weight:700;margin-bottom:.25rem}
+.callout-text{font-size:14px;line-height:1.7;margin:0}
+.callout-navy{background:var(--navy-l);border:1px solid rgba(27,79,138,.2)}
+.callout-navy .callout-title{color:var(--navy)}
+.callout-navy .callout-text{color:var(--sub)}
+.callout-teal{background:var(--teal-l);border:1px solid rgba(13,122,110,.2)}
+.callout-teal .callout-title{color:var(--teal-d)}
+.callout-teal .callout-text{color:var(--sub)}
+.callout-amber{background:var(--amber-l);border:1px solid rgba(133,77,14,.2)}
+.callout-amber .callout-title{color:var(--amber)}
+.callout-amber .callout-text{color:var(--sub)}
+
+/* ── Comparison table ── */
+.cmp-wrap{overflow-x:auto;margin:1.5rem 0 2rem}
+.cmp-table{width:100%;border-collapse:collapse;font-size:14px;
+  border:1.5px solid var(--border);border-radius:10px;overflow:hidden}
+.cmp-table th{padding:.75rem 1rem;font-size:12px;font-weight:700;
+  letter-spacing:.04em;text-align:left;white-space:nowrap}
+.cmp-table th.col-feature{background:#F0F4F8;color:var(--sub);width:190px}
+.cmp-table th.col-open{background:#FFF8F0;color:#7A4D0E}
+.cmp-table th.col-jam{background:var(--teal-l);color:var(--teal-d)}
+.cmp-table td{padding:.625rem 1rem;border-top:1px solid var(--border-l);
+  vertical-align:top;color:var(--sub);line-height:1.6}
+.cmp-table td:first-child{font-weight:600;color:var(--text);
+  background:#FAFCFF;white-space:nowrap}
+.cmp-table tr:hover td{background:#F8FBFF}
+.cmp-win{color:var(--teal-d);font-weight:500}
+.cmp-gap{color:var(--muted);font-style:italic}
+
+/* ── MLLP table ── */
+.data-table{width:100%;border-collapse:collapse;font-size:14px;
+  margin:1.25rem 0 1.75rem;border:1px solid var(--border);border-radius:8px;overflow:hidden}
+.data-table th{padding:.625rem .875rem;background:#F0F4F8;font-size:12px;
+  font-weight:700;letter-spacing:.04em;color:var(--sub);text-align:left}
+.data-table td{padding:.5rem .875rem;border-top:1px solid var(--border-l);
+  color:var(--sub);font-size:14px;vertical-align:top}
+.data-table td:first-child{font-family:var(--mono);font-weight:600;color:var(--navy);font-size:12px}
+.data-table tr:hover td{background:#F8FBFF}
+
+/* ── IHE badges ── */
+.badge-row{display:flex;flex-wrap:wrap;gap:.4rem;margin:1rem 0}
+.ihe-badge{font-size:12px;font-weight:600;padding:3px 10px;border-radius:20px;
+  background:var(--bg);border:1px solid var(--border);color:var(--navy)}
+
+/* ── Timeline ── */
+.timeline{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));
+  gap:.875rem;margin:1.25rem 0 1.75rem}
+.tl-card{background:var(--white);border:1.5px solid var(--border);border-radius:9px;
+  padding:.875rem 1rem}
+.tl-week{font-size:11.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--teal-d);margin-bottom:.4rem}
+.tl-title{font-size:14px;font-weight:700;color:var(--text);margin-bottom:.375rem}
+.tl-items{font-size:13px;color:var(--sub);line-height:1.7}
+
+/* ── Architecture diagram wrapper ── */
+.diagram-wrap{background:var(--bg);border:1.5px solid var(--border);
+  border-radius:12px;padding:1.5rem;margin:1.5rem 0;overflow-x:auto}
+
+/* ── CTA banner ── */
+.cta-banner{background:linear-gradient(160deg,#1A2535 0%,#0F1A28 100%);
+  border-radius:14px;padding:2rem 1.75rem;display:flex;justify-content:space-between;
+  align-items:center;gap:1.5rem;margin:2rem 0;flex-wrap:wrap}
+.cta-banner h3{color:white;margin:0 0 .375rem;font-size:1.125rem}
+.cta-banner p{color:#B8D4E8;font-size:14px;margin:0}
+.cta-btns{display:flex;gap:.625rem;flex-wrap:wrap;flex-shrink:0}
+.btn{display:inline-flex;align-items:center;gap:5px;font-size:13px;font-weight:600;
+  padding:.5rem 1.125rem;border-radius:7px;text-decoration:none;white-space:nowrap;
+  transition:all .15s}
+.btn-white{background:white;color:var(--navy)}
+.btn-white:hover{background:#F0F4FC}
+.btn-outline{border:1.5px solid rgba(255,255,255,.35);color:white}
+.btn-outline:hover{background:rgba(255,255,255,.1)}
+.btn-teal-banner{background:rgba(255,255,255,.15);color:white;
+  border:1.5px solid rgba(255,255,255,.3)}
+.btn-teal-banner:hover{background:rgba(255,255,255,.25)}
+
+/* ── Footer ── */
+footer{background:#0D1F33;color:#7AAAD0;padding:2rem 1.5rem;font-size:13px}
+.footer-inner{max-width:1160px;margin:0 auto;display:flex;justify-content:space-between;
+  align-items:center;flex-wrap:wrap;gap:1rem}
+footer a{color:#7AAAD0;text-decoration:none}
+footer a:hover{color:white}
+
+/* ── Responsive ── */
+@media(max-width:860px){
+  .page-body{grid-template-columns:1fr}
+  .toc{display:none}
+}
+@media(max-width:600px){
+  .post-header{padding:2rem 1rem 0}
+  .page-body{padding:2rem 1rem 4rem}
+  .cta-banner{flex-direction:column;text-align:center}
+}
+</style>
+</head>
+<body>
+
+<nav style="position:sticky;top:0;z-index:100;background:rgba(240,247,255,.97);backdrop-filter:blur(8px);border-bottom:1px solid #B8D4E8;">
+  <div style="max-width:1120px;margin:0 auto;padding:0 1.5rem;height:60px;display:flex;align-items:center;justify-content:space-between;">
+    <a href="https://platform.akhester.com" style="display:flex;align-items:center;gap:10px;text-decoration:none;">
+      <div style="position:relative;width:34px;height:34px;flex-shrink:0;">
+        <div style="width:34px;height:34px;border-radius:50%;background:#1B4F8A;display:flex;align-items:center;justify-content:center;">
+          <span style="color:white;font-size:10px;font-weight:800;letter-spacing:-.5px;">AJ</span>
+        </div>
+        <svg style="position:absolute;top:0;left:0;width:34px;height:34px;" viewBox="0 0 36 36" fill="none">
+          <path d="M5 18 C5 10.8 10.8 5 18 5 C21.4 5 24.5 6.4 26.8 8.6" stroke="#1A9E90" stroke-width="2.5" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <div style="display:flex;align-items:baseline;gap:6px;">
+        <span style="font-size:18px;font-weight:800;color:#0D1F33;letter-spacing:-.5px;">FHIR</span>
+        <span style="font-size:9.5px;font-weight:700;color:#5A8AA8;letter-spacing:.08em;text-transform:uppercase;border-left:1px solid #B8D4E8;padding-left:6px;">Platform</span>
+      </div>
+    </a>
+    <div style="display:flex;align-items:center;gap:2px;">
+      <a href="https://platform.akhester.com/#platform" style="font-size:13.5px;font-weight:500;color:#3D6A8A;text-decoration:none;padding:5px 11px;border-radius:7px;">Products</a>
+      <a href="https://platform.akhester.com/demo" style="font-size:13.5px;font-weight:500;color:#3D6A8A;text-decoration:none;padding:5px 11px;border-radius:7px;">Demos</a>
+      <a href="blog.html" style="font-size:13.5px;font-weight:600;color:#1B4F8A;text-decoration:none;padding:5px 11px;border-radius:7px;background:#E0EFFE;">Blog</a>
+      <a href="https://open.akhester.com" target="_blank" style="font-size:13.5px;font-weight:500;color:#3D6A8A;text-decoration:none;padding:5px 11px;border-radius:7px;">Docs &#8599;</a>
+    </div>
+    <a href="https://platform.akhester.com/#contact" style="display:inline-flex;align-items:center;gap:5px;background:#1B4F8A;color:white;font-size:13.5px;font-weight:600;padding:8px 18px;border-radius:8px;text-decoration:none;">Book a call &#8594;</a>
+  </div>
+</nav>
+
+<!-- BREADCRUMB -->
+<div style="max-width:1120px;margin:0 auto;padding:.875rem 1.5rem 0">
+  <div class="breadcrumb">
+    <a href="https://platform.akhester.com">platform.akhester.com</a>
+    <span style="margin:0 .375rem">/</span>
+    <a href="blog.html">Blog</a>
+    <span style="margin:0 .375rem">/</span>
+    <span style="color:var(--text)">JamBridge &amp; the Jam ecosystem</span>
+  </div>
+</div>
+
+<div style="max-width:1120px;margin:1.75rem auto 0;padding:0 1.5rem">
+  <div style="border-radius:14px;overflow:hidden;background:linear-gradient(160deg,#151D28 0%,#1A2535 55%,#1E2A38 100%);padding:2.5rem 2rem;position:relative;display:flex;align-items:center;justify-content:space-between;gap:2rem;min-height:220px;flex-wrap:wrap">
+    <div style="flex:1;min-width:280px;position:relative;z-index:2">
+      <div style="display:inline-flex;align-items:center;gap:7px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.25);border-radius:20px;padding:3px 12px;margin-bottom:1rem">
+        <span style="font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:rgba(255,255,255,.85)">Integration &#183; Technical Deep-Dive</span>
+      </div>
+      <h2 style="font-size:clamp(1.25rem,2.5vw,1.75rem);font-weight:800;color:white;letter-spacing:-.025em;line-height:1.15;margin-bottom:.75rem;max-width:480px">
+        JamBridge &amp; the Jam ecosystem &#8212; large hospital chains
+      </h2>
+      <div style="display:flex;flex-wrap:wrap;gap:.4rem;margin-bottom:1.125rem">
+        <span style="background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);border-radius:20px;padding:2px 10px;font-size:11px;font-weight:600;color:rgba(255,255,255,.85)">JamBridge</span>
+        <span style="background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);border-radius:20px;padding:2px 10px;font-size:11px;font-weight:600;color:rgba(255,255,255,.85)">HL7v2 &#183; FHIR R4</span>
+        <span style="background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);border-radius:20px;padding:2px 10px;font-size:11px;font-weight:600;color:rgba(255,255,255,.85)">vs OpenHIM</span>
+        <span style="background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);border-radius:20px;padding:2px 10px;font-size:11px;font-weight:600;color:rgba(255,255,255,.85)">Hospital Chain</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:.75rem">
+        <div style="width:30px;height:30px;border-radius:50%;background:rgba(255,255,255,.15);display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;color:white;flex-shrink:0">AJ</div>
+        <div>
+          <div style="font-size:13px;font-weight:600;color:white">AJ FHIR Platform</div>
+          <div style="font-size:11.5px;color:rgba(255,255,255,.6)">June 2026 &#183; 28 min read</div>
+        </div>
+      </div>
+    </div>
+    <div style="flex-shrink:0;opacity:.88">
+      <svg viewBox="0 0 260 195" width="260" height="195" style="display:block">
+        <rect x="10"  y="8"  width="68" height="25" rx="5" fill="rgba(255,255,255,.12)" stroke="rgba(255,255,255,.25)" stroke-width="1"/>
+        <text x="44"  y="24" font-family="-apple-system,sans-serif" font-size="8" font-weight="600" fill="white" text-anchor="middle">Epic/Cerner</text>
+        <rect x="95"  y="8"  width="68" height="25" rx="5" fill="rgba(255,255,255,.12)" stroke="rgba(255,255,255,.25)" stroke-width="1"/>
+        <text x="129" y="24" font-family="-apple-system,sans-serif" font-size="8" font-weight="600" fill="white" text-anchor="middle">HL7v2/MLLP</text>
+        <rect x="180" y="8"  width="68" height="25" rx="5" fill="rgba(255,255,255,.12)" stroke="rgba(255,255,255,.25)" stroke-width="1"/>
+        <text x="214" y="24" font-family="-apple-system,sans-serif" font-size="8" font-weight="600" fill="white" text-anchor="middle">SMART Apps</text>
+        <line x1="44"  y1="33" x2="104" y2="49" stroke="rgba(255,255,255,.2)" stroke-width="1" stroke-dasharray="3 2"/>
+        <line x1="129" y1="33" x2="129" y2="49" stroke="rgba(255,255,255,.2)" stroke-width="1" stroke-dasharray="3 2"/>
+        <line x1="214" y1="33" x2="154" y2="49" stroke="rgba(255,255,255,.2)" stroke-width="1" stroke-dasharray="3 2"/>
+        <rect x="18"  y="51" width="222" height="36" rx="7" fill="rgba(255,255,255,.18)" stroke="rgba(255,255,255,.4)" stroke-width="1.5"/>
+        <text x="129" y="66" font-family="-apple-system,sans-serif" font-size="11" font-weight="800" fill="white" text-anchor="middle">JamBridge</text>
+        <text x="129" y="79" font-family="-apple-system,sans-serif" font-size="7.5" fill="#B8DCFF" text-anchor="middle">7-stage &#183; MLLP :2575&#8211;:2582 &#183; FHIR R4</text>
+        <line x1="74"  y1="87" x2="54"  y2="101" stroke="rgba(255,255,255,.18)" stroke-width="1" stroke-dasharray="2 2"/>
+        <line x1="129" y1="87" x2="129" y2="101" stroke="rgba(255,255,255,.18)" stroke-width="1" stroke-dasharray="2 2"/>
+        <line x1="184" y1="87" x2="204" y2="101" stroke="rgba(255,255,255,.18)" stroke-width="1" stroke-dasharray="2 2"/>
+        <rect x="10"  y="103" width="62" height="28" rx="5" fill="rgba(26,158,144,.3)" stroke="rgba(90,196,184,.3)" stroke-width="1"/>
+        <text x="41"  y="120" font-family="-apple-system,sans-serif" font-size="8.5" font-weight="700" fill="#B0E8E0" text-anchor="middle">JamMPI</text>
+        <rect x="98"  y="103" width="62" height="28" rx="5" fill="rgba(26,158,144,.3)" stroke="rgba(90,196,184,.3)" stroke-width="1"/>
+        <text x="129" y="120" font-family="-apple-system,sans-serif" font-size="8.5" font-weight="700" fill="#B0E8E0" text-anchor="middle">HAPI FHIR</text>
+        <rect x="186" y="103" width="62" height="28" rx="5" fill="rgba(83,74,183,.3)" stroke="rgba(200,192,240,.3)" stroke-width="1"/>
+        <text x="217" y="120" font-family="-apple-system,sans-serif" font-size="8.5" font-weight="700" fill="#C8C0F0" text-anchor="middle">JamGuard</text>
+        <rect x="10"  y="143" width="62" height="24" rx="5" fill="rgba(255,255,255,.07)" stroke="rgba(255,255,255,.12)" stroke-width="1"/>
+        <text x="41"  y="158" font-family="-apple-system,sans-serif" font-size="7.5" font-weight="600" fill="rgba(255,255,255,.55)" text-anchor="middle">AJ Consent</text>
+        <rect x="98"  y="143" width="62" height="24" rx="5" fill="rgba(255,255,255,.07)" stroke="rgba(255,255,255,.12)" stroke-width="1"/>
+        <text x="129" y="158" font-family="-apple-system,sans-serif" font-size="7.5" font-weight="600" fill="rgba(255,255,255,.55)" text-anchor="middle">JamConnect</text>
+        <rect x="186" y="143" width="62" height="24" rx="5" fill="rgba(255,255,255,.07)" stroke="rgba(255,255,255,.12)" stroke-width="1"/>
+        <text x="217" y="158" font-family="-apple-system,sans-serif" font-size="7.5" font-weight="600" fill="rgba(255,255,255,.55)" text-anchor="middle">JamSHR/TS</text>
+        <text x="129" y="186" font-family="-apple-system,sans-serif" font-size="7" fill="rgba(255,255,255,.28)" text-anchor="middle">ATNA &#183; BALP &#183; IHE profiles &#183; SMART v2.2</text>
+      </svg>
+    </div>
+    <svg style="position:absolute;inset:0;width:100%;height:100%;opacity:.04;pointer-events:none" viewBox="0 0 400 220" preserveAspectRatio="xMidYMid slice">
+      <defs><pattern id="bgrid" width="20" height="20" patternUnits="userSpaceOnUse"><path d="M20 0L0 0 0 20" fill="none" stroke="white" stroke-width=".5"/></pattern></defs>
+      <rect width="400" height="220" fill="url(#bgrid)"/>
+    </svg>
+  </div>
+</div>
+
+<!-- PAGE BODY: TOC + ARTICLE -->
+<div class="page-body">
+
+  <aside class="toc">
+    <div class="toc-heading">On this page</div>
+    <ul>
+      <li><a href="#what-is-jambridge">What is JamBridge?</a></li>
+      <li><a href="#seven-stage">The 7-stage pipeline</a></li>
+      <li><a href="#mllp-routes">MLLP routes</a></li>
+      <li class="toc-sep"></li>
+      <li><a href="#ecosystem">The Jam ecosystem</a></li>
+      <li><a href="#integration">Integration &amp; coordination</a></li>
+      <li><a href="#identity">Identity &amp; registry</a></li>
+      <li><a href="#clinical">Clinical services</a></li>
+      <li><a href="#safety">Safety &amp; intelligence</a></li>
+      <li class="toc-sep"></li>
+      <li><a href="#vs-openhim">JamBridge vs OpenHIM</a></li>
+      <li><a href="#philosophy">Philosophy &amp; architecture</a></li>
+      <li><a href="#feature-comparison">Feature comparison</a></li>
+      <li><a href="#migration">Migration path</a></li>
+      <li class="toc-sep"></li>
+      <li><a href="#hospital-chain">Hospital chain deployment</a></li>
+      <li><a href="#topology">Network topology</a></li>
+      <li><a href="#patient-identity">Cross-branch identity</a></li>
+      <li><a href="#data-flow">Data flow walkthrough</a></li>
+      <li><a href="#safety-chain">Cross-branch safety</a></li>
+      <li><a href="#go-live">Go-live timeline</a></li>
+      <li class="toc-sep"></li>
+      <li><a href="#standards">Standards &amp; compliance</a></li>
+    </ul>
+  </aside>
+
+  <article class="article">
+
+
+    <!-- WHAT IS JAMBRIDGE -->
+    <h2 id="what-is-jambridge">What is JamBridge?</h2>
+    <p>JamBridge is the HL7v2-to-FHIR R4 integration gateway at the centre of the Jam clinical data platform. It sits between your existing hospital information systems &#8212; Epic, Cerner, MEDITECH, or any HIS that speaks HL7v2 &#8212; and a FHIR R4 data store, translating decades of HL7v2 message traffic into modern, queryable, consent-governed FHIR resources in real time.</p>
+    <p>It is not a middleware bus or an iPaaS. It is a purpose-built clinical integration engine that understands the semantics of HL7v2 messages &#8212; why a PID segment means a patient identity event, why an OBX with a LOINC code means a lab result that may require a drug safety check, why an RDE means a prescription that must be checked for drug-drug interactions across all branches before being written. That clinical understanding is baked into the 7-stage pipeline and cannot be bolted on after the fact.</p>
+
+    <div class="callout callout-navy">
+      <div class="callout-icon">&#x1F3D7;</div>
+      <div class="callout-body">
+        <div class="callout-title">Open source foundation</div>
+        <div class="callout-text">JamBridge is built on the <strong>AJ FHIR Platform</strong> &#8212; an Apache 2.0 open source infrastructure stack. The HAPI FHIR server, Auth Server, Consent Manager, MPI, and Facility Registry are all open source and auditable. JamBridge is the commercial integration engine that connects them into a working clinical pipeline.</div>
+      </div>
+    </div>
+
+    <h3>Core responsibilities</h3>
+    <p>JamBridge does seven things, in order, for every HL7v2 message it receives:</p>
+    <ol>
+      <li><strong>Receive</strong> &#8212; raw HL7v2 bytes over MLLP, parse with HAPI HL7v2 Terser, stamp a transaction ID.</li>
+      <li><strong>Deduplicate</strong> &#8212; check MSH-10 control ID against a 24-hour window in <code>hie_transaction_log</code>. Replayed messages are ACK&#8217;d without re-processing.</li>
+      <li><strong>Enrich</strong> &#8212; resolve sending facility to a FHIR Organization via JamFR (ITI-90) and resolve patient to a golden record ID via JamMPI (ITI-119 <code>$match</code>).</li>
+      <li><strong>Transform</strong> &#8212; PID &#8594; Patient, PV1 &#8594; Encounter, OBX &#8594; Observation with LOINC codes validated and translated by JamTS.</li>
+      <li><strong>Govern</strong> &#8212; call AJ Consent Manager via JamConnect. If the patient has withheld consent, generate an HL7v2 NACK and stop. Fail-closed: NACK if consent service is unreachable.</li>
+      <li><strong>Persist</strong> &#8212; conditional create/update to HAPI FHIR. Circuit breaker protects HAPI from thundering-herd failures.</li>
+      <li><strong>Dispatch</strong> &#8212; FHIR subscription fan-out, outbound MLLP to LIS, JamConnect POST_WRITE events, DHIS2 surveillance pushes, ATNA audit.</li>
+    </ol>
+
+    <!-- PIPELINE -->
+    <h2 id="seven-stage">The 7-stage clinical pipeline</h2>
+    <p>Every message enters the same pipeline. The stages are sequential and non-configurable &#8212; this is deliberate. Consent must be checked before data is written. Identity must be resolved before transformation. A general-purpose bus cannot enforce this ordering without custom mediators that re-implement clinical logic for every deployment.</p>
+
+    <div class="pipeline">
+      <div class="pipe-step">
+        <div class="pipe-left">
+          <div class="pipe-num" style="background:var(--navy-l);color:var(--navy);border-color:var(--navy)">1</div>
+          <div class="pipe-line"></div>
+        </div>
+        <div class="pipe-body">
+          <div class="pipe-stage" style="background:var(--navy-l);color:var(--navy)">RECEIVE</div>
+          <div class="pipe-title">MLLP reception + MSH-10 deduplication</div>
+          <div class="pipe-desc">Raw HL7v2 bytes arrive on a Camel MLLP consumer. MSH-10 is checked against <code>hie_transaction_log</code>. Duplicate messages within 24 hours are ACK&#8217;d without re-processing. The <code>Hl7v2Parser</code> extracts typed objects using the HAPI HL7v2 Terser.</div>
+        </div>
+      </div>
+      <div class="pipe-step">
+        <div class="pipe-left">
+          <div class="pipe-num" style="background:var(--teal-l);color:var(--teal-d);border-color:var(--teal)">2</div>
+          <div class="pipe-line"></div>
+        </div>
+        <div class="pipe-body">
+          <div class="pipe-stage" style="background:var(--teal-l);color:var(--teal-d)">ENRICH</div>
+          <div class="pipe-title">Facility registry (ITI-90) + MPI $match (ITI-119)</div>
+          <div class="pipe-desc"><code>FacilityCodeResolver</code> calls JamFR on a 5-minute cache. <code>MpiClientService</code> sends <code>Patient/$match</code> to JamMPI &#8212; Jaro-Winkler name scoring, date-of-birth similarity, exact national ID matching. The <strong>golden record ID</strong> is stamped on the FHIR resource via <code>Patient.link[refer]</code>.</div>
+        </div>
+      </div>
+      <div class="pipe-step">
+        <div class="pipe-left">
+          <div class="pipe-num" style="background:var(--purple-l);color:var(--purple);border-color:var(--purple)">3</div>
+          <div class="pipe-line"></div>
+        </div>
+        <div class="pipe-body">
+          <div class="pipe-stage" style="background:var(--purple-l);color:var(--purple)">TRANSFORM</div>
+          <div class="pipe-title">HL7v2 &#8594; FHIR R4 + terminology translation</div>
+          <div class="pipe-desc"><code>Hl7v2ToFhirMapper</code> converts parsed HL7v2 to FHIR R4. OBX segments become Observations &#8212; JamTS validates LOINC codes via <code>ConceptMap/$translate</code> and federates to Snowstorm for SNOMED CT diagnosis codes.</div>
+        </div>
+      </div>
+      <div class="pipe-step">
+        <div class="pipe-left">
+          <div class="pipe-num" style="background:var(--amber-l);color:var(--amber);border-color:var(--amber)">4</div>
+          <div class="pipe-line"></div>
+        </div>
+        <div class="pipe-body">
+          <div class="pipe-stage" style="background:var(--amber-l);color:var(--amber)">GOVERN</div>
+          <div class="pipe-title">Consent enforcement via AJ Consent (fail-closed)</div>
+          <div class="pipe-desc"><code>JamConnectClient.checkConsent()</code> calls AJ Consent Manager. Patient reference, actor, resource type, action (read/write), and purpose (TREAT / RESEARCH / PUBLIC-HEALTH) are checked. <code>"permitted": false</code> generates a NACK and stops the pipeline. Unreachable consent service also NACK&#8217;s &#8212; fail-closed by design.</div>
+        </div>
+      </div>
+      <div class="pipe-step">
+        <div class="pipe-left">
+          <div class="pipe-num" style="background:#E8F0FA;color:var(--navy);border-color:var(--navy)">5</div>
+          <div class="pipe-line"></div>
+        </div>
+        <div class="pipe-body">
+          <div class="pipe-stage" style="background:#E8F0FA;color:var(--navy)">PERSIST</div>
+          <div class="pipe-title">HAPI FHIR conditional create/update</div>
+          <div class="pipe-desc"><code>FhirClientService.conditionalUpdate()</code> sends <code>PUT /fhir/Patient?identifier=...</code> to HAPI. A Resilience4j circuit breaker protects against HAPI downtime &#8212; open-circuit messages queue in <code>SecondaryRetryQueue</code> with exponential backoff, up to 10 attempts. <code>ConsentEnforcementInterceptor</code> on HAPI provides a second consent check for any SMART app queries.</div>
+        </div>
+      </div>
+      <div class="pipe-step">
+        <div class="pipe-left">
+          <div class="pipe-num" style="background:var(--teal-l);color:var(--teal-d);border-color:var(--teal)">6</div>
+          <div class="pipe-line"></div>
+        </div>
+        <div class="pipe-body">
+          <div class="pipe-stage" style="background:var(--teal-l);color:var(--teal-d)">DISPATCH</div>
+          <div class="pipe-title">Subscription fan-out + JamConnect + downstream adapters</div>
+          <div class="pipe-desc"><code>SubscriptionEventDispatcher</code> evaluates 17 seeded FHIR subscriptions asynchronously. Matched channels fire outbound MLLP, FHIR REST, or SMS deliveries. JamConnect&#8217;s <code>POST_WRITE</code> event triggers IPS cache invalidation in JamSHR, CDS Hooks dispatch, and clinical alert escalation. ORU messages with notifiable LOINC codes (dengue, TB, malaria) fire DHIS2 surveillance pushes.</div>
+        </div>
+      </div>
+      <div class="pipe-step">
+        <div class="pipe-left">
+          <div class="pipe-num" style="background:var(--navy-l);color:var(--navy);border-color:var(--navy)">7</div>
+          <div class="pipe-line" style="display:none"></div>
+        </div>
+        <div class="pipe-body">
+          <div class="pipe-stage" style="background:var(--navy-l);color:var(--navy)">ACK</div>
+          <div class="pipe-title">HL7v2 MSA|AA acknowledgement + ATNA audit</div>
+          <div class="pipe-desc">MSA|AA is returned to the sending system on the same MLLP connection. Transaction log is finalised. IHE ATNA AuditEvent is written asynchronously via RFC 5425 TLS syslog and as a BALP FHIR AuditEvent to HAPI. Audit writing never blocks the ACK path.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MLLP ROUTES -->
+    <h2 id="mllp-routes">MLLP route configuration</h2>
+    <p>JamBridge opens eight MLLP listeners, one per message type. Each has its own Camel route, channel, and retry configuration, determined by <code>BridgeConfig</code> &#8212; a country-agnostic YAML file that maps port numbers to message types and downstream behaviour.</p>
+
+    <table class="data-table">
+      <thead><tr><th>Port</th><th>Message type</th><th>Trigger</th><th>Key FHIR resources</th></tr></thead>
+      <tbody>
+        <tr><td>:2575</td><td>ADT</td><td>Patient movement A01&#8211;A52</td><td>Patient, Encounter, Location</td></tr>
+        <tr><td>:2576</td><td>ORU</td><td>Lab results, vitals, microbiology</td><td>Observation, DiagnosticReport</td></tr>
+        <tr><td>:2577</td><td>ORM / OML</td><td>Lab and radiology orders</td><td>ServiceRequest, Specimen</td></tr>
+        <tr><td>:2578</td><td>MDM</td><td>Clinical documents, discharge summaries</td><td>DocumentReference, Composition</td></tr>
+        <tr><td>:2579</td><td>QBP</td><td>Cross-facility patient lookups</td><td>Patient (query response)</td></tr>
+        <tr><td>:2580</td><td>RDE</td><td>Prescription orders from HIS/pharmacy</td><td>MedicationRequest</td></tr>
+        <tr><td>:2581</td><td>SIU</td><td>Appointment create/modify/cancel</td><td>Appointment, Slot</td></tr>
+        <tr><td>:2582</td><td>MFN</td><td>Provider and location master data</td><td>Practitioner, PractitionerRole, Location</td></tr>
+      </tbody>
+    </table>
+
+    <!-- ECOSYSTEM -->
+    <h2 id="ecosystem">The Jam ecosystem</h2>
+    <p>JamBridge is one component in a coordinated platform of 10+ products. Each is independently deployable, but designed to work together. The integration points between components are all standard FHIR R4 operations or REST APIs &#8212; nothing proprietary.</p>
+
+    <h3 id="integration">Integration &amp; coordination</h3>
+    <div class="layer-label layer-navy">Integration &amp; Coordination</div>
+    <div class="card-grid">
+      <div class="card">
+        <div class="card-head"><span class="card-name">JamBridge</span><span class="card-badge badge-navy">Commercial &middot; v1.0</span></div>
+        <p class="card-desc">HL7v2-to-FHIR R4 integration engine. MLLP reception on 8 typed ports. 7-stage pipeline with identity enrichment, consent enforcement, and ATNA audit. The OpenHIM replacement with a clinical-grade pipeline. Port :8443.</p>
+      </div>
+      <div class="card">
+        <div class="card-head"><span class="card-name">JamConnect</span><span class="card-badge badge-navy">Commercial &middot; v0.2</span></div>
+        <p class="card-desc">Clinical intelligence facade. Single API coordinating JamMPI, AJ Consent, JamFR, CDS Hooks dispatch, and clinical event routing. JamBridge calls JamConnect for consent checks and POST_WRITE events. Decouples the pipeline from each registry service. Port :8091.</p>
+      </div>
+    </div>
+
+    <h3 id="identity">Identity &amp; registry</h3>
+    <div class="layer-label layer-teal">Identity &amp; Registry &#8212; Apache 2.0 open source</div>
+    <div class="card-grid">
+      <div class="card">
+        <div class="card-head"><span class="card-name">JamMPI</span><span class="card-badge badge-teal">Open source</span></div>
+        <p class="card-desc">Master Patient Index with probabilistic matching. Jaro-Winkler name scoring + exact national ID matching + date-of-birth similarity. CERTAIN / PROBABLE / POSSIBLE grades. Golden records unify a patient across all branches. IHE PDQm (ITI-78), PIXm (ITI-83), PMIR. Port :8081.</p>
+      </div>
+      <div class="card">
+        <div class="card-head"><span class="card-name">JamFR</span><span class="card-badge badge-teal">Open source</span></div>
+        <p class="card-desc">Facility Registry. mCSD-conformant ITI-90 hospital and clinic directory. Auto-provisioning from HL7v2 MSH-4 facility codes. DHIS2 orgUnit mapping for surveillance. Port :8089.</p>
+      </div>
+      <div class="card">
+        <div class="card-head"><span class="card-name">AJ Consent Manager</span><span class="card-badge badge-teal">Open source &middot; 181 tests</span></div>
+        <p class="card-desc">FHIR R4/R5 Consent lifecycle with patient portal. <code>ConsentEnforcementInterceptor</code> fires before every HAPI FHIR read/write. deny-by-default. GDPR Art. 17 and HIPAA minimum necessary mapped to <code>provision.class</code> and <code>provision.period</code>. Port :8082.</p>
+      </div>
+      <div class="card">
+        <div class="card-head"><span class="card-name">AJ Auth Server</span><span class="card-badge badge-teal">Open source &middot; 90 tests</span></div>
+        <p class="card-desc">Complete SMART App Launch v2.2. Spring AS 1.3. PKCE S256 (96-byte verifier, 768-bit entropy &#8212; 3&times; spec minimum). RS256 <code>id_token</code> with <code>fhirUser</code> claim. Azure AD / Okta / Epic IdP / ADFS federation. Port :9000.</p>
+      </div>
+    </div>
+
+    <h3 id="clinical">Clinical services</h3>
+    <div class="layer-label layer-purple">Clinical Data &amp; Applications</div>
+    <div class="card-grid">
+      <div class="card">
+        <div class="card-head"><span class="card-name">JamSHR</span><span class="card-badge badge-purple">Commercial &middot; v1.0</span></div>
+        <p class="card-desc">Shared Health Record. <code>Patient/$summary</code> returns an IPS assembled in real time from all connected facilities. IHE MHD document store (ITI-65/66/67/68). IPS cache invalidated by JamConnect on every POST_WRITE. Port :8084.</p>
+      </div>
+      <div class="card">
+        <div class="card-head"><span class="card-name">JamTS</span><span class="card-badge badge-purple">Commercial &middot; v1.0</span></div>
+        <p class="card-desc">Terminology Service. LOINC, SNOMED CT, ICD-10, and local lab code system mappings. <code>$translate</code>, <code>$lookup</code>, <code>$validate-code</code>. Snowstorm federation for full SNOMED CT. Port :8085.</p>
+      </div>
+      <div class="card">
+        <div class="card-head"><span class="card-name">JamReferral</span><span class="card-badge badge-teal">Open source &middot; v1.0</span></div>
+        <p class="card-desc">Cross-branch referral state machine. FHIR ServiceRequest + Task. Five states: DRAFT &#8594; SENT &#8594; ACCEPTED &#8594; IN_PROGRESS &#8594; COMPLETED. 48-hour accept timeout with auto-escalation. Consent check before dispatch. Port :8093.</p>
+      </div>
+      <div class="card">
+        <div class="card-head"><span class="card-name">JamPHR</span><span class="card-badge badge-purple">Commercial &middot; v1.0</span></div>
+        <p class="card-desc">Patient-facing portal. Full IPS cross-facility view. SMART App Launch v2.2. Consent management UI. WHO VDS-NC digital vaccination certificates with QR codes.</p>
+      </div>
+      <div class="card">
+        <div class="card-head"><span class="card-name">JamDHIW</span><span class="card-badge badge-purple">Commercial &middot; v1.0</span></div>
+        <p class="card-desc">Analytics warehouse. FHIR <code>$export</code> bulk export piped to DHIS2. Real-time notifiable disease surveillance: dengue (LOINC 80823-7), malaria (32700-2), TB (11545-1). Population health dashboards. Port :8086.</p>
+      </div>
+    </div>
+
+    <h3 id="safety">Clinical safety &amp; intelligence</h3>
+    <div class="layer-label layer-amber">Clinical Safety &amp; Intelligence</div>
+    <div class="card-grid">
+      <div class="card">
+        <div class="card-head"><span class="card-name">JamGuard</span><span class="card-badge badge-amber">Commercial &middot; v1.0</span></div>
+        <p class="card-desc"><strong>Drug-drug interaction</strong> (NLM RxNorm API) &#8212; checks ALL active MedicationRequests across ALL branches before every prescription write. <strong>Drug-allergy</strong> cross-branch check. <strong>Missed follow-up</strong> (hourly scan, configurable window). <strong>Polypharmacy</strong> (&gt;10 active medications, age &gt;65). <strong>Duplicate prescription</strong> (same ATC class from two branches within 30 days). Port :8094.</p>
+      </div>
+      <div class="card">
+        <div class="card-head"><span class="card-name">JamConnect CDS</span><span class="card-badge badge-navy">Commercial &middot; v0.2</span></div>
+        <p class="card-desc">Configurable rule engine on every POST_WRITE event. Rules dispatch CDS Hooks cards, invalidate JamSHR IPS cache, fire SMS alerts to community health workers, trigger DHIS2 surveillance, and start escalation timers. 5 rules evaluated per event in virtual threads.</p>
+      </div>
+    </div>
+
+    <!-- VS OPENHIM -->
+    <h2 id="vs-openhim">JamBridge vs OpenHIM</h2>
+    <p>OpenHIM is the most widely deployed open source health interoperability middleware in low- and middle-income country deployments, built by the Health Architecture Lab at the University of Cape Town and used as the reference mediator platform for OpenHIE. JamBridge was built specifically to replace it in contexts where clinical depth, FHIR R4 nativity, and commercial-grade reliability are required.</p>
+
+    <h3 id="philosophy">Philosophy and architecture</h3>
+    <p>The fundamental difference is architectural philosophy. OpenHIM is a <strong>general-purpose middleware bus</strong> &#8212; it routes messages through a mediator chain but has no inherent understanding of clinical content. Each mediator must implement its own parsing, transformation, and consent logic. OpenHIM does not know what an ADT A01 means, or that an OBX-8 = H requires different downstream action than OBX-8 = N.</p>
+    <p>JamBridge is a <strong>clinical integration engine</strong>. The pipeline is not configurable precisely because clinical workflows have a correct order. A general-purpose bus cannot enforce this ordering without custom mediators that re-implement clinical logic for every deployment.</p>
+
+    <div class="callout callout-amber">
+      <div class="callout-icon">&#x2696;&#xFE0F;</div>
+      <div class="callout-body">
+        <div class="callout-title">When OpenHIM is still the right choice</div>
+        <div class="callout-text">If your integration needs are primarily routing HL7v2 messages between systems without FHIR transformation, and you have the developer capacity to build and maintain custom mediators, OpenHIM remains a solid, free option with a large community. JamBridge is the right choice when you need real-time FHIR R4 transformation, cross-facility patient identity, consent enforcement, clinical safety rules, and a production-grade commercial SLA.</div>
+      </div>
+    </div>
+
+    <h3 id="feature-comparison">Feature comparison</h3>
+    <div class="cmp-wrap">
+    <table class="cmp-table">
+      <thead>
+        <tr>
+          <th class="col-feature">Capability</th>
+          <th class="col-open">OpenHIM</th>
+          <th class="col-jam">JamBridge</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>HL7v2 MLLP reception</td><td class="cmp-win">&#10003; via MLLP mediator</td><td class="cmp-win">&#10003; native, 8 typed ports</td></tr>
+        <tr><td>HL7v2 &#8594; FHIR R4 transform</td><td class="cmp-gap">Custom mediator per message type</td><td class="cmp-win">&#10003; built-in, all 8 types</td></tr>
+        <tr><td>Patient identity resolution</td><td class="cmp-gap">External OpenCR, manual config</td><td class="cmp-win">&#10003; JamMPI $match, automatic</td></tr>
+        <tr><td>Consent enforcement</td><td class="cmp-gap">Custom mediator; no standard model</td><td class="cmp-win">&#10003; FHIR R4 Consent, fail-closed</td></tr>
+        <tr><td>FHIR R4 persistence</td><td class="cmp-gap">Route to external server; no circuit breaker</td><td class="cmp-win">&#10003; HAPI integration, circuit breaker</td></tr>
+        <tr><td>Terminology translation</td><td class="cmp-gap">No built-in</td><td class="cmp-win">&#10003; JamTS, LOINC/SNOMED/ICD-10</td></tr>
+        <tr><td>Drug safety (DDI)</td><td class="cmp-gap">Not provided</td><td class="cmp-win">&#10003; JamGuard, cross-facility</td></tr>
+        <tr><td>DHIS2 surveillance push</td><td class="cmp-gap">Custom mediator; no LOINC mapping</td><td class="cmp-win">&#10003; built-in, LOINC&#8594;DHIS2 mapping</td></tr>
+        <tr><td>FHIR subscriptions / fan-out</td><td class="cmp-gap">HTTP routing only</td><td class="cmp-win">&#10003; 17 seeded subs, MLLP+REST+SMS</td></tr>
+        <tr><td>SMART App Launch v2.2</td><td class="cmp-gap">Not provided</td><td class="cmp-win">&#10003; AJ Auth Server, PKCE S256</td></tr>
+        <tr><td>IHE ATNA audit</td><td class="cmp-win">&#10003; transaction logging</td><td class="cmp-win">&#10003; RFC 5425 TLS + BALP AuditEvent</td></tr>
+        <tr><td>Admin portal</td><td class="cmp-win">&#10003; full web UI</td><td class="cmp-win">&#10003; Thymeleaf + HTMX</td></tr>
+        <tr><td>Cross-facility IPS summary</td><td class="cmp-gap">Not provided</td><td class="cmp-win">&#10003; JamSHR $summary, real-time</td></tr>
+        <tr><td>MSH-10 deduplication</td><td>Transaction log only</td><td class="cmp-win">&#10003; 24h window, automatic</td></tr>
+        <tr><td>Licence</td><td class="cmp-win">MPL 2.0 &#8212; free</td><td>AJ FHIR core Apache 2.0; JamBridge commercial</td></tr>
+        <tr><td>Commercial SLA</td><td class="cmp-gap">Community only</td><td class="cmp-win">&#10003; Standard / Enterprise / Government</td></tr>
+        <tr><td>Kubernetes Helm chart</td><td>Community charts</td><td class="cmp-win">&#10003; included</td></tr>
+      </tbody>
+    </table>
+    </div>
+
+    <h3 id="migration">Migration path from OpenHIM</h3>
+    <p>Most OpenHIM deployments follow a pattern: an MLLP mediator receives HL7v2, a transformation mediator converts to JSON or XML, and the output is forwarded downstream. JamBridge replaces all of this with a single service, but the migration does not need to be a cutover.</p>
+    <ol>
+      <li><strong>Weeks 1&#8211;2:</strong> Deploy JamBridge alongside OpenHIM. Configure new MLLP ports. Begin mirroring a subset of traffic to JamBridge.</li>
+      <li><strong>Weeks 3&#8211;4:</strong> Validate FHIR output. Resolve any HL7v2 segment edge cases from your HIS vendor.</li>
+      <li><strong>Weeks 5&#8211;6:</strong> Redirect production MLLP traffic to JamBridge. Decommission OpenHIM mediators for migrated message types.</li>
+      <li><strong>Week 8+:</strong> Full cutover. OpenHIM decommissioned.</li>
+    </ol>
+
+    <!-- HOSPITAL CHAIN -->
+    <h2 id="hospital-chain">JamBridge in a large hospital chain</h2>
+    <p>The hospital chain deployment is where JamBridge&#8217;s cross-facility architecture shows its value most clearly. A single patient attends multiple branches. Their medication is prescribed at one branch, their lab results are at another, their imaging is at a third. Without a unified golden record and a cross-facility FHIR store, clinicians at each branch see only a fragment of the patient&#8217;s history &#8212; and safety events like drug-drug interactions across branches are invisible.</p>
+
+    <h3 id="topology">Network topology</h3>
+    <p>In a typical 3&#8211;10 branch chain, every branch runs its own HIS. JamBridge is deployed as a central service (or cluster for high availability) that all branches connect to over dedicated MLLP TCP sockets. FHIR REST connections from private-network hospitals use SMART Bearer tokens issued by the AJ Auth Server.</p>
+
+    <div class="diagram-wrap">
+      <svg viewBox="0 0 660 310" width="100%" style="display:block">
+        <text x="10" y="16" font-family="-apple-system,sans-serif" font-size="9" font-weight="700" fill="#5A8AA8" letter-spacing=".08em">BRANCH FACILITIES</text>
+        <rect x="10"  y="24" width="108" height="52" rx="7" fill="white" stroke="#B8D4E8" stroke-width="1.2"/><text x="64"  y="44" font-family="-apple-system,sans-serif" font-size="9.5" font-weight="700" fill="#0D1F33" text-anchor="middle">Branch 01</text><text x="64"  y="57" font-family="-apple-system,sans-serif" font-size="8.5" fill="#3D6A8A" text-anchor="middle">MEDITECH &middot; MLLP</text><text x="64"  y="69" font-family="-apple-system,sans-serif" font-size="8" fill="#5A8AA8" text-anchor="middle">ADT &middot; ORU &middot; RDE</text>
+        <rect x="134" y="24" width="108" height="52" rx="7" fill="white" stroke="#B8D4E8" stroke-width="1.2"/><text x="188" y="44" font-family="-apple-system,sans-serif" font-size="9.5" font-weight="700" fill="#0D1F33" text-anchor="middle">Branch 02</text><text x="188" y="57" font-family="-apple-system,sans-serif" font-size="8.5" fill="#3D6A8A" text-anchor="middle">Cerner &middot; MLLP</text><text x="188" y="69" font-family="-apple-system,sans-serif" font-size="8" fill="#5A8AA8" text-anchor="middle">ADT &middot; ORU &middot; ORM</text>
+        <rect x="258" y="24" width="108" height="52" rx="7" fill="white" stroke="#B8D4E8" stroke-width="1.2"/><text x="312" y="44" font-family="-apple-system,sans-serif" font-size="9.5" font-weight="700" fill="#0D1F33" text-anchor="middle">Branch 03</text><text x="312" y="57" font-family="-apple-system,sans-serif" font-size="8.5" fill="#3D6A8A" text-anchor="middle">Epic &middot; SMART REST</text><text x="312" y="69" font-family="-apple-system,sans-serif" font-size="8" fill="#5A8AA8" text-anchor="middle">FHIR R4</text>
+        <rect x="382" y="24" width="108" height="52" rx="7" fill="white" stroke="#D0A870" stroke-width="1.2"/><text x="436" y="44" font-family="-apple-system,sans-serif" font-size="9.5" font-weight="700" fill="#0D1F33" text-anchor="middle">Central Lab</text><text x="436" y="57" font-family="-apple-system,sans-serif" font-size="8.5" fill="#854D0E" text-anchor="middle">LIS &middot; MLLP</text><text x="436" y="69" font-family="-apple-system,sans-serif" font-size="8" fill="#854D0E" text-anchor="middle">ORU &middot; ORM</text>
+        <rect x="506" y="24" width="144" height="52" rx="7" fill="white" stroke="#C8B8E8" stroke-width="1.2"/><text x="578" y="44" font-family="-apple-system,sans-serif" font-size="9.5" font-weight="700" fill="#0D1F33" text-anchor="middle">Pharmacy chain</text><text x="578" y="57" font-family="-apple-system,sans-serif" font-size="8.5" fill="#5A2D8A" text-anchor="middle">Pharma HIS &middot; MLLP</text><text x="578" y="69" font-family="-apple-system,sans-serif" font-size="8" fill="#5A2D8A" text-anchor="middle">RDE &middot; DDI checks</text>
+        <path d="M64,76 C64,116 240,130 240,138" stroke="#B8D4E8" stroke-width="1" stroke-dasharray="3 2" fill="none"/>
+        <path d="M188,76 C188,100 260,126 260,138" stroke="#B8D4E8" stroke-width="1" stroke-dasharray="3 2" fill="none"/>
+        <path d="M312,76 C312,106 310,126 300,138" stroke="#B8D4E8" stroke-width="1" stroke-dasharray="3 2" fill="none"/>
+        <path d="M436,76 C436,106 380,126 370,138" stroke="#D0A870" stroke-width="1" stroke-dasharray="3 2" fill="none"/>
+        <path d="M578,76 C578,106 430,126 420,138" stroke="#C8B8E8" stroke-width="1" stroke-dasharray="3 2" fill="none"/>
+        <rect x="100" y="140" width="460" height="42" rx="9" fill="#1B4F8A"/>
+        <text x="194" y="157" font-family="-apple-system,sans-serif" font-size="12" font-weight="800" fill="white">JamBridge &#8212; Central Integration Engine</text>
+        <text x="194" y="172" font-family="-apple-system,sans-serif" font-size="9.5" fill="#B8DCFF">7-stage pipeline &nbsp;&middot;&nbsp; MLLP :2575&#8211;:2582 &nbsp;&middot;&nbsp; Golden records &nbsp;&middot;&nbsp; Consent &nbsp;&middot;&nbsp; ATNA</text>
+        <path d="M200,182 C200,194 148,202 140,212" stroke="#B8D4E8" stroke-width="1" stroke-dasharray="2 2" fill="none"/>
+        <path d="M260,182 C260,194 228,202 220,212" stroke="#5AC4B8" stroke-width="1" stroke-dasharray="2 2" fill="none"/>
+        <path d="M330,182 C330,194 340,202 340,212" stroke="#C8B8E8" stroke-width="1" stroke-dasharray="2 2" fill="none"/>
+        <path d="M400,182 C400,194 420,202 428,212" stroke="#D0A870" stroke-width="1" stroke-dasharray="2 2" fill="none"/>
+        <path d="M480,182 C480,194 510,202 518,212" stroke="#90B8E8" stroke-width="1" stroke-dasharray="2 2" fill="none"/>
+        <rect x="10"  y="214" width="86" height="48" rx="7" fill="#D8F0EC" stroke="#5AC4B8" stroke-width="1"/><text x="53" y="233" font-family="-apple-system,sans-serif" font-size="9" font-weight="700" fill="#0A5A50" text-anchor="middle">JamMPI</text><text x="53" y="246" font-family="-apple-system,sans-serif" font-size="8" fill="#0A6058" text-anchor="middle">Golden records</text><text x="53" y="257" font-family="-apple-system,sans-serif" font-size="7.5" fill="#0A6058" text-anchor="middle">:8081</text>
+        <rect x="110" y="214" width="86" height="48" rx="7" fill="#D8F0EC" stroke="#5AC4B8" stroke-width="1"/><text x="153" y="233" font-family="-apple-system,sans-serif" font-size="9" font-weight="700" fill="#0A5A50" text-anchor="middle">HAPI FHIR</text><text x="153" y="246" font-family="-apple-system,sans-serif" font-size="8" fill="#0A6058" text-anchor="middle">R4 &middot; chain store</text><text x="153" y="257" font-family="-apple-system,sans-serif" font-size="7.5" fill="#0A6058" text-anchor="middle">:8080</text>
+        <rect x="210" y="214" width="86" height="48" rx="7" fill="#EDE4FF" stroke="#C8B8E8" stroke-width="1"/><text x="253" y="233" font-family="-apple-system,sans-serif" font-size="9" font-weight="700" fill="#5A2D8A" text-anchor="middle">JamGuard</text><text x="253" y="246" font-family="-apple-system,sans-serif" font-size="8" fill="#5A2D8A" text-anchor="middle">DDI &middot; safety</text><text x="253" y="257" font-family="-apple-system,sans-serif" font-size="7.5" fill="#5A2D8A" text-anchor="middle">:8094</text>
+        <rect x="310" y="214" width="86" height="48" rx="7" fill="#EDE4FF" stroke="#C8B8E8" stroke-width="1"/><text x="353" y="233" font-family="-apple-system,sans-serif" font-size="9" font-weight="700" fill="#5A2D8A" text-anchor="middle">JamSHR</text><text x="353" y="246" font-family="-apple-system,sans-serif" font-size="8" fill="#5A2D8A" text-anchor="middle">IPS &middot; cross-branch</text><text x="353" y="257" font-family="-apple-system,sans-serif" font-size="7.5" fill="#5A2D8A" text-anchor="middle">:8084</text>
+        <rect x="410" y="214" width="86" height="48" rx="7" fill="#FFF4E8" stroke="#D0A870" stroke-width="1"/><text x="453" y="233" font-family="-apple-system,sans-serif" font-size="9" font-weight="700" fill="#854D0E" text-anchor="middle">JamConnect</text><text x="453" y="246" font-family="-apple-system,sans-serif" font-size="8" fill="#854D0E" text-anchor="middle">CDS &middot; intelligence</text><text x="453" y="257" font-family="-apple-system,sans-serif" font-size="7.5" fill="#854D0E" text-anchor="middle">:8091</text>
+        <rect x="510" y="214" width="140" height="48" rx="7" fill="#E8F0FA" stroke="#90B8E8" stroke-width="1"/><text x="580" y="233" font-family="-apple-system,sans-serif" font-size="9" font-weight="700" fill="#1B4F8A" text-anchor="middle">ATNA &middot; Auth Server</text><text x="580" y="246" font-family="-apple-system,sans-serif" font-size="8" fill="#3D6A8A" text-anchor="middle">Audit &middot; SMART SSO</text><text x="580" y="257" font-family="-apple-system,sans-serif" font-size="7.5" fill="#3D6A8A" text-anchor="middle">:8444 &middot; :9000</text>
+        <rect x="10" y="278" width="640" height="22" rx="5" fill="#F0F4F8" stroke="#DDE3EA" stroke-width="1"/>
+        <text x="330" y="293" font-family="-apple-system,sans-serif" font-size="8.5" fill="#5A8AA8" text-anchor="middle" letter-spacing=".04em">Kubernetes &middot; Helm chart included &middot; single cluster or multi-region active/active</text>
+      </svg>
+    </div>
+
+    <h3 id="patient-identity">Cross-branch patient identity &#8212; the golden record</h3>
+    <p>The hardest problem in a hospital chain deployment is not the integration &#8212; it is the identity. A patient attends Branch 01 as <em>MRN12345</em>. The same patient attends Branch 03 as <em>PRIV-9901</em>. Without a Master Patient Index, these are two different patients in the FHIR store, and JamGuard cannot know that the Warfarin prescribed at Branch 01 and the Aspirin prescribed at Branch 03 belong to the same person.</p>
+    <p>JamMPI resolves this on every message using three strategies in combination: <strong>national ID exact match</strong> (earns CERTAIN grade, score &ge; 0.95), <strong>Jaro-Winkler name + date-of-birth similarity</strong> (earns PROBABLE above a configurable threshold), and a <strong>blocking strategy</strong> that pre-filters candidates by first-3-chars of family name and birth year to keep comparison space manageable.</p>
+    <p>The golden record ID is stamped on every FHIR Patient resource via <code>Patient.link[type=refer]</code> and a custom extension. Every downstream system that queries HAPI for this patient by golden ID gets all records from all branches.</p>
+
+    <h3 id="data-flow">Full data flow walkthrough</h3>
+    <p>Here is what happens when Branch 01&#8217;s MEDITECH HIS admits a patient who was previously seen at Branch 03:</p>
+    <ol>
+      <li>MEDITECH sends <code>ADT^A01</code> to JamBridge on MLLP :2575. MSH-10 <code>BR01-001</code> is checked &#8212; not a duplicate.</li>
+      <li>JamFR resolves MSH-4 <code>BRANCH-01</code> to <code>Organization/org-br01-001</code> (cached 5 min).</li>
+      <li>JamMPI runs <code>Patient/$match</code>. Finds CERTAIN match to <code>GOLDEN-00441</code> &#8212; the same patient seen at Branch 03 under a different local MRN.</li>
+      <li>JamTS translates local lab codes to LOINC and SNOMED CT diagnosis codes via Snowstorm.</li>
+      <li>AJ Consent Manager: patient <code>GOLDEN-00441</code>, actor <code>org-br01-001</code>, resource Patient, action write, purpose TREAT. <code>"permitted": true</code>.</li>
+      <li>HAPI FHIR: <code>PUT /fhir/Patient?identifier=MRN12345</code>. ConsentEnforcementInterceptor fires. Patient/MRN123456 version 3 written.</li>
+      <li>3 outbound subscription channels fire. JamConnect POST_WRITE invalidates JamSHR IPS cache for <code>GOLDEN-00441</code>.</li>
+      <li>Dr. Smith opens JamPHR. <code>GET /fhir/Patient/GOLDEN-00441/$summary</code> returns an IPS from Branch 01, Branch 03, and the central lab &#8212; medications from both branches, allergies recorded at Branch 03, imaging from Branch 02&#8217;s PACS.</li>
+      <li>Dr. Smith orders Warfarin 5mg. RDE^O11 arrives on :2580. JamGuard fetches all active MedicationRequests for <code>GOLDEN-00441</code> across all branches. Finds Aspirin 100mg at Branch 03. <strong>NLM RxNorm: MAJOR interaction.</strong> Alert fires before the prescription is written.</li>
+    </ol>
+
+    <h3 id="safety-chain">Cross-branch safety rules in practice</h3>
+    <p>JamGuard&#8217;s power in a hospital chain context is that it sees the <em>complete</em> medication list &#8212; not just what was prescribed at the current branch. The four active rules in a typical chain deployment:</p>
+    <ul>
+      <li><strong>DRUG_DRUG_INTERACTION:</strong> On every MedicationRequest write, fetches all active MedicationRequests for the golden patient ID across all branches and sends the RxNorm CUI list to the NLM RxNorm Interaction API. MAJOR interactions block and alert the prescriber. MODERATE interactions create a warning card without blocking.</li>
+      <li><strong>DRUG_ALLERGY:</strong> Checks new MedicationRequest against all AllergyIntolerance resources for the golden patient across all branches.</li>
+      <li><strong>MISSED_FOLLOWUP:</strong> Hourly scan for Observations with OBX-8 = H (High) or L (Low) from the last 72 hours for which no follow-up Encounter has been created.</li>
+      <li><strong>DUPLICATE_PRESCRIPTION:</strong> Checks whether a new MedicationRequest is in the same ATC drug class as a medication already active from another branch within 30 days.</li>
+    </ul>
+
+    <h3 id="go-live">Go-live timeline for a 5-branch chain</h3>
+    <div class="timeline">
+      <div class="tl-card"><div class="tl-week">Weeks 1&#8211;2</div><div class="tl-title">Infrastructure &amp; config</div><div class="tl-items">Kubernetes deployment<br/>MLLP port firewall rules<br/>BridgeConfig YAML<br/>JamMPI ID field mapping</div></div>
+      <div class="tl-card"><div class="tl-week">Weeks 3&#8211;4</div><div class="tl-title">First branch pilot</div><div class="tl-items">Branch 01 MLLP connection<br/>ADT A01/A03/A08 smoke tests<br/>Golden record validation<br/>ATNA audit verification</div></div>
+      <div class="tl-card"><div class="tl-week">Weeks 5&#8211;6</div><div class="tl-title">ORU + pharmacy</div><div class="tl-items">ORU^R01 lab results<br/>LOINC code mapping<br/>JamGuard DDI config<br/>RDE^O11 prescriptions</div></div>
+      <div class="tl-card"><div class="tl-week">Weeks 7&#8211;8</div><div class="tl-title">Remaining branches</div><div class="tl-items">Branches 02&#8211;05 connected<br/>HIS vendor edge cases<br/>Cross-branch IPS testing<br/>Clinician portal SMART</div></div>
+      <div class="tl-card"><div class="tl-week">Week 9+</div><div class="tl-title">Production &amp; monitoring</div><div class="tl-items">Grafana dashboard live<br/>Prometheus alerting<br/>DHIS2 surveillance<br/>JamDHIW analytics</div></div>
+    </div>
+
+    <!-- STANDARDS -->
+    <h2 id="standards">IHE profiles and compliance</h2>
+    <p>IHE profiles implemented across JamBridge and the Jam platform (v1.0 release):</p>
+    <div class="badge-row">
+      <span class="ihe-badge">ITI-8 Patient Identity Feed</span>
+      <span class="ihe-badge">ITI-20 ATNA Audit</span>
+      <span class="ihe-badge">ITI-65/66 MHD Provide/Update</span>
+      <span class="ihe-badge">ITI-67/68 MHD Find/Retrieve</span>
+      <span class="ihe-badge">ITI-78 PDQm</span>
+      <span class="ihe-badge">ITI-83 PIXm</span>
+      <span class="ihe-badge">ITI-90 mCSD</span>
+      <span class="ihe-badge">ITI-93/94 PMIR</span>
+      <span class="ihe-badge">ITI-119 PIXm $match</span>
+      <span class="ihe-badge">IPS $summary</span>
+      <span class="ihe-badge">SMART v2.2</span>
+      <span class="ihe-badge">BALP AuditEvent</span>
+      <span class="ihe-badge">WHO VDS-NC</span>
+    </div>
+    <p style="margin-top:1rem">Regulatory compliance: <strong>GDPR</strong> (Art. 17 erasure, Art. 30 audit trail), <strong>HIPAA</strong> (&#167;164.312 audit, BAA available), <strong>HTI-1</strong> (SMART on FHIR API certification), <strong>DISHA</strong> (consent artefact model).</p>
+
+    <!-- CTA -->
+    <div class="cta-banner" style="margin-top:3rem">
+      <div>
+        <h3>See JamBridge live</h3>
+        <p>28-step hospital chain simulation &#8212; ADT admit through full pipeline, cross-branch IPS, DDI safety alert, ATNA audit trail.</p>
+      </div>
+      <div class="cta-btns">
+        <a href="https://platform.akhester.com/demo/jambridge-hospital-chain.html" class="btn btn-white">&#x25B6; Live demo</a>
+        <a href="https://platform.akhester.com/#contact" class="btn btn-outline">Book a call &#8594;</a>
+      </div>
+    </div>
+
+    <div class="cta-banner" style="background:linear-gradient(160deg,#161E1C 0%,#1E2E28 100%)">
+      <div>
+        <h3>Open source first</h3>
+        <p>Auth Server, Consent Manager, MPI, Facility Registry &#8212; all Apache 2.0. Deploy and audit the full AJ FHIR stack before any commercial commitment.</p>
+      </div>
+      <div class="cta-btns">
+        <a href="https://open.akhester.com" target="_blank" class="btn btn-white">Read the docs</a>
+        <a href="https://platform.akhester.com" class="btn btn-teal-banner">platform.akhester.com</a>
+      </div>
+    </div>
+
+  
+  </article>
+
+</div><!-- .page-body -->
+
+<!-- POST NAVIGATION -->
+<div style="max-width:1120px;margin:0 auto;padding:0 1.5rem 3.5rem">
+  <div style="border-top:1px solid var(--border-l);padding-top:2rem;
+    display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+    <!-- Prev -->
+    <a href="blog.html" style="border:1.5px solid var(--border);border-radius:11px;
+      padding:1.125rem 1.25rem;text-decoration:none;display:flex;flex-direction:column;gap:.375rem;
+      transition:border-color .15s,box-shadow .15s;" onmouseover="this.style.borderColor='#1B4F8A';this.style.boxShadow='0 4px 16px rgba(27,79,138,.08)'" onmouseout="this.style.borderColor='#B8D4E8';this.style.boxShadow='none'">
+      <span style="font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--muted)">&#8592; Back to blog</span>
+      <span style="font-size:14px;font-weight:600;color:var(--text)">All articles</span>
+    </a>
+    <!-- Next -->
+    <a href="#" style="border:1.5px solid var(--border);border-radius:11px;
+      padding:1.125rem 1.25rem;text-decoration:none;display:flex;flex-direction:column;
+      align-items:flex-end;gap:.375rem;text-align:right;
+      transition:border-color .15s,box-shadow .15s;" onmouseover="this.style.borderColor='#1B4F8A';this.style.boxShadow='0 4px 16px rgba(27,79,138,.08)'" onmouseout="this.style.borderColor='#B8D4E8';this.style.boxShadow='none'">
+      <span style="font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--muted)">Next article &#8594;</span>
+      <span style="font-size:14px;font-weight:600;color:var(--text)">SMART App Launch v2.2 &#8212; what most implementations get wrong</span>
+    </a>
+  </div>
+</div>
+
+<footer style="background:#1A3050;border-top:2px solid #243E60;margin-top:0;">
+  <div style="max-width:1120px;margin:0 auto;padding:3rem 1.5rem;">
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:2rem;margin-bottom:2rem;">
+      <div>
+        <div style="display:flex;align-items:center;gap:9px;margin-bottom:.875rem;">
+          <div style="position:relative;width:32px;height:32px;flex-shrink:0;">
+            <div style="width:32px;height:32px;border-radius:50%;background:#1B4F8A;display:flex;align-items:center;justify-content:center;"><span style="color:white;font-size:10px;font-weight:800;">AJ</span></div>
+            <svg style="position:absolute;top:0;left:0;width:32px;height:32px;" viewBox="0 0 36 36" fill="none"><path d="M5 18 C5 10.8 10.8 5 18 5 C21.4 5 24.5 6.4 26.8 8.6" stroke="#1A9E90" stroke-width="2.5" stroke-linecap="round"/></svg>
+          </div>
+          <span style="font-size:17px;font-weight:800;color:white;letter-spacing:-.5px;">FHIR</span>
+        </div>
+        <p style="color:#A8D0E8;font-size:13px;line-height:1.65;margin:0;">Open source FHIR infrastructure.<br/>Apache 2.0 core. Commercial Jam platform on top.</p>
+      </div>
+      <div>
+        <div style="color:#7EB8D8;font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;margin-bottom:.875rem;">Platform</div>
+        <div style="display:flex;flex-direction:column;gap:7px;">
+          <a href="https://platform.akhester.com/#platform" style="color:#A8D0E8;font-size:13.5px;text-decoration:none;">Products</a>
+          <a href="https://platform.akhester.com/demo" style="color:#A8D0E8;font-size:13.5px;text-decoration:none;">Live demos</a>
+          <a href="https://open.akhester.com" target="_blank" style="color:#A8D0E8;font-size:13.5px;text-decoration:none;">Documentation &#8599;</a>
+          <a href="https://platform.akhester.com/#pricing" style="color:#A8D0E8;font-size:13.5px;text-decoration:none;">Pricing</a>
+        </div>
+      </div>
+      <div>
+        <div style="color:#7EB8D8;font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;margin-bottom:.875rem;">Blog</div>
+        <div style="display:flex;flex-direction:column;gap:7px;">
+          <a href="blog.html" style="color:#A8D0E8;font-size:13.5px;text-decoration:none;">All posts</a>
+          <a href="blog.html?cat=integration" style="color:#A8D0E8;font-size:13.5px;text-decoration:none;">Integration</a>
+          <a href="blog.html?cat=smart" style="color:#A8D0E8;font-size:13.5px;text-decoration:none;">SMART on FHIR</a>
+          <a href="blog.html?cat=hospital-ops" style="color:#A8D0E8;font-size:13.5px;text-decoration:none;">Hospital Ops</a>
+        </div>
+      </div>
+      <div>
+        <div style="color:#7EB8D8;font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;margin-bottom:.875rem;">Standards</div>
+        <div style="display:flex;flex-direction:column;gap:7px;">
+          <a href="https://hl7.org/fhir/smart-app-launch/" target="_blank" style="color:#A8D0E8;font-size:13.5px;text-decoration:none;">SMART App Launch &#8599;</a>
+          <a href="https://hl7.org/fhir/R4/" target="_blank" style="color:#A8D0E8;font-size:13.5px;text-decoration:none;">FHIR R4 &#8599;</a>
+          <a href="https://hapifhir.io" target="_blank" style="color:#A8D0E8;font-size:13.5px;text-decoration:none;">HAPI FHIR &#8599;</a>
+        </div>
+      </div>
+    </div>
+    <div style="border-top:1px solid #243E60;padding-top:1.25rem;display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:.75rem;">
+      <p style="color:#6A9AB8;font-size:12.5px;margin:0;">&#169; 2026 Akhester Technologies LLP &#183; FHIR&#174; is a registered trademark of HL7</p>
+      <a href="mailto:support@ajfhir.com" style="color:#A8D0E8;font-size:12.5px;text-decoration:none;">support@ajfhir.com</a>
+    </div>
+  </div>
+</footer>
+
+<script>
+(function(){
+  var links = document.querySelectorAll('.toc a');
+  var targets = [];
+  links.forEach(function(l){
+    var id = l.getAttribute('href').replace('#','');
+    var el = document.getElementById(id);
+    if(el) targets.push({el:el,link:l});
+  });
+  function onScroll(){
+    var best=null,bestY=-Infinity;
+    targets.forEach(function(t){
+      var y=t.el.getBoundingClientRect().top;
+      if(y<=84&&y>bestY){bestY=y;best=t;}
+    });
+    links.forEach(function(l){l.classList.remove('active');});
+    if(best)best.link.classList.add('active');
+  }
+  window.addEventListener('scroll',onScroll,{passive:true});
+  onScroll();
+})();
+</script>
+</body>
+</html>
